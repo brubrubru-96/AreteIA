@@ -298,12 +298,37 @@ class step6 {
             $a_val = $item['answer'] ?? $item['respuesta'] ?? $item['correct'] ?? '';
             
             // Flatten arrays/objects if AI hallucinated format
-            if (is_array($q_val) || is_object($q_val)) $q_val = json_encode($q_val, JSON_UNESCAPED_UNICODE);
-            if (is_array($a_val) || is_object($a_val)) $a_val = json_encode($a_val, JSON_UNESCAPED_UNICODE);
-            if (is_bool($a_val)) $a_val = $a_val ? 'Verdadero' : 'Falso';
-            
+            if (is_array($q_val) || is_object($q_val)) {
+                $q_val = is_array($q_val) && count($q_val) > 0 && is_string($q_val[0]) 
+                    ? implode(' ', $q_val) 
+                    : json_encode($q_val, JSON_UNESCAPED_UNICODE);
+            }
             $q = s((string)$q_val);
-            $a = s((string)$a_val);
+
+            // Format answer nicely if it's an array (like matching questions)
+            if (is_array($a_val) || is_object($a_val)) {
+                $a_val = (array)$a_val;
+                $formatted_ans = [];
+                foreach ($a_val as $sub_item) {
+                    if (is_array($sub_item) || is_object($sub_item)) {
+                        $sub_item = (array)$sub_item;
+                        $premise = $sub_item['premise'] ?? $sub_item['premisa'] ?? $sub_item['key'] ?? '';
+                        $ans = $sub_item['answer'] ?? $sub_item['respuesta'] ?? $sub_item['value'] ?? '';
+                        if ($premise && $ans) {
+                            $formatted_ans[] = "<strong>" . s($premise) . ":</strong> " . s($ans);
+                        } else {
+                            $formatted_ans[] = s(json_encode($sub_item, JSON_UNESCAPED_UNICODE));
+                        }
+                    } else {
+                        $formatted_ans[] = s((string)$sub_item);
+                    }
+                }
+                $a = implode('<br><span style="color:#666; font-size:11px;">---</span><br>', $formatted_ans);
+            } else {
+                if (is_bool($a_val)) $a_val = $a_val ? 'Verdadero' : 'Falso';
+                $a = s((string)$a_val);
+            }
+            
             echo "<tr><td>{$q}</td><td style=\"color:#2e7d32; font-weight:600;\">{$a}</td></tr>";
         }
         echo '</tbody></table>';
