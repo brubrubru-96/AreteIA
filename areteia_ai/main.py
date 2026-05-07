@@ -193,8 +193,8 @@ async def _prepare_prompt_data(request: GenerateRequest):
         )
         from rag.search import search_course, search_guidelines
 
-        if request.feedback:
-            raw_feedback = classify_feedback(request.feedback)
+        if request.feedback and request.feedback.strip() and request.feedback.strip().lower() not in ('undefined', 'null'):
+            raw_feedback = classify_feedback(request.feedback.strip())
             if raw_feedback:
                 try:
                     # Clean JSON in case LLM added markdown wrappers
