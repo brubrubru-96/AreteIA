@@ -294,8 +294,16 @@ class step6 {
         echo '<thead><tr><th style="width:60%;">Pregunta / Ítem</th><th>Respuesta correcta</th></tr></thead><tbody>';
         foreach ($items as $item) {
             $item = (array)$item;
-            $q = s($item['question'] ?? $item['pregunta'] ?? $item['text'] ?? '');
-            $a = s($item['answer'] ?? $item['respuesta'] ?? $item['correct'] ?? '');
+            $q_val = $item['question'] ?? $item['pregunta'] ?? $item['text'] ?? '';
+            $a_val = $item['answer'] ?? $item['respuesta'] ?? $item['correct'] ?? '';
+            
+            // Flatten arrays/objects if AI hallucinated format
+            if (is_array($q_val) || is_object($q_val)) $q_val = json_encode($q_val, JSON_UNESCAPED_UNICODE);
+            if (is_array($a_val) || is_object($a_val)) $a_val = json_encode($a_val, JSON_UNESCAPED_UNICODE);
+            if (is_bool($a_val)) $a_val = $a_val ? 'Verdadero' : 'Falso';
+            
+            $q = s((string)$q_val);
+            $a = s((string)$a_val);
             echo "<tr><td>{$q}</td><td style=\"color:#2e7d32; font-weight:600;\">{$a}</td></tr>";
         }
         echo '</tbody></table>';
@@ -313,7 +321,10 @@ class step6 {
         echo '<thead><tr><th style="width:70%;">Criterio</th><th style="text-align:center;">Logrado</th><th style="text-align:center;">No logrado</th></tr></thead><tbody>';
         foreach ($items as $item) {
             $item = (array)$item;
-            $c = s($item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '');
+            $c_val = $item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '';
+            if (is_array($c_val) || is_object($c_val)) $c_val = json_encode($c_val, JSON_UNESCAPED_UNICODE);
+            $c = s((string)$c_val);
+
             echo "<tr><td>{$c}</td><td style=\"text-align:center;\">☐</td><td style=\"text-align:center;\">☐</td></tr>";
         }
         echo '</tbody></table>';
@@ -334,12 +345,16 @@ class step6 {
         echo '<thead><tr><th style="width:40%;">Criterio</th>';
         foreach ($levels as $lv) {
             $lv = is_array($lv) ? ($lv['label'] ?? $lv['name'] ?? '') : $lv;
-            echo '<th style="text-align:center; font-size:11px;">' . s($lv) . '</th>';
+            if (is_array($lv) || is_object($lv)) $lv = json_encode($lv, JSON_UNESCAPED_UNICODE);
+            echo '<th style="text-align:center; font-size:11px;">' . s((string)$lv) . '</th>';
         }
         echo '</tr></thead><tbody>';
         foreach ($items as $item) {
             $item = (array)$item;
-            $c = s($item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '');
+            $c_val = $item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '';
+            if (is_array($c_val) || is_object($c_val)) $c_val = json_encode($c_val, JSON_UNESCAPED_UNICODE);
+            $c = s((string)$c_val);
+
             echo "<tr><td>{$c}</td>";
             for ($i = 0; $i < $level_count; $i++) {
                 echo '<td style="text-align:center;">○</td>';
@@ -390,21 +405,29 @@ class step6 {
         echo '<thead><tr><th style="width:20%; vertical-align:bottom; padding:10px;">Criterio</th>';
         foreach ($level_headers as $idx => $lh) {
             $bg = $colors[$idx] ?? '#f5f5f5';
-            echo '<th style="text-align:center; padding:10px; background:' . $bg . '; font-size:11px;">' . s($lh) . '</th>';
+            if (is_array($lh) || is_object($lh)) $lh = json_encode($lh, JSON_UNESCAPED_UNICODE);
+            echo '<th style="text-align:center; padding:10px; background:' . $bg . '; font-size:11px;">' . s((string)$lh) . '</th>';
         }
         echo '</tr></thead><tbody>';
 
         foreach ($items as $item) {
             $item = (array)$item;
-            $c = s($item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '');
+            $c_val = $item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '';
+            if (is_array($c_val) || is_object($c_val)) $c_val = json_encode($c_val, JSON_UNESCAPED_UNICODE);
+            $c = s((string)$c_val);
+            
             $weight = isset($item['weight']) ? ' (' . $item['weight'] . '%)' : '';
 
             echo '<tr><td style="font-weight:600; padding:10px; vertical-align:top; border-right:2px solid #ddd;">' . $c . $weight . '</td>';
 
+
             $descs = $item['descriptors'] ?? $item['descriptores'] ?? $item['levels'] ?? [];
             foreach ($descs as $idx => $d) {
                 $d = (array)$d;
-                $text = s($d['description'] ?? $d['descriptor'] ?? $d['text'] ?? '');
+                $t_val = $d['description'] ?? $d['descriptor'] ?? $d['text'] ?? '';
+                if (is_array($t_val) || is_object($t_val)) $t_val = json_encode($t_val, JSON_UNESCAPED_UNICODE);
+                $text = s((string)$t_val);
+                
                 $bg = $colors[$idx] ?? '#f5f5f5';
                 echo '<td style="padding:10px; font-size:11px; line-height:1.5; background:' . $bg . '; vertical-align:top;">' . $text . '</td>';
             }
