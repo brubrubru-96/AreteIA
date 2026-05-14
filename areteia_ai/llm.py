@@ -1,48 +1,97 @@
 import os
 import logging
-import dashscope
-from dashscope import Generation
+from abc import ABC, abstractmethod
 from dotenv import load_dotenv
 
 load_dotenv()
 
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
-DEFAULT_MODEL = os.getenv("DASHSCOPE_MODEL", "qwen-plus")
+class LLMProvider(ABC):
+    @abstractmethod
+    def generate_completion(self, prompt: str, system_prompt: str) -> tuple[str, dict]:
+        pass
 
-# Fix for workspace-specific endpoints
-base_url = os.getenv("DASHSCOPE_BASE_URL")
-if base_url:
-    dashscope.base_http_api_url = base_url
+class DashScopeProvider(LLMProvider):
+    def __init__(self):
+        import dashscope
+        from dashscope import Generation
+        self.Generation = Generation
+        
+        dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+        self.model = os.getenv("DASHSCOPE_MODEL", "qwen-plus")
+        
+        # Fix for workspace-specific endpoints
+        base_url = os.getenv("DASHSCOPE_BASE_URL")
+        if base_url:
+            dashscope.base_http_api_url = base_url
 
-def generate_completion(prompt: str, system_prompt: str = "Eres un experto en pedagogía y diseño de instrumentos de evaluación."):
-    """
-    Calls Alibaba DashScope API (Qwen) for text generation.
-    Returns (content, usage)
-    """
-    try:
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': prompt}
-        ]
-        response = Generation.call(
-            model=DEFAULT_MODEL,
-            messages=messages,
-            result_format='message',
-        )
-        if response.status_code == 200:
-            content = response.output.choices[0].message.content
+    def generate_completion(self, prompt: str, system_prompt: str) -> tuple[str, dict]:
+        try:
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': prompt}
+            ]
+            response = self.Generation.call(
+                model=self.model,
+                messages=messages,
+                result_format='message',
+            )
+            if response.status_code == 200:
+                content = response.output.choices[0].message.content
+                usage = {
+                    "input_tokens": response.usage.input_tokens,
+                    "output_tokens": response.usage.output_tokens,
+                    "total_tokens": response.usage.total_tokens
+                }
+                return content, usage
+            else:
+                logging.error(f"DashScope Error: {response.code} - {response.message}")
+                return None, None
+        except Exception as e:
+            logging.exception("Exception during DashScope call")
+            return None, None
+
+class OpenAIProvider(LLMProvider):
+    def __init__(self):
+        import openai
+        self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = os.getenv("OPENAI_MODEL", "gpt-4o")
+
+    def generate_completion(self, prompt: str, system_prompt: str) -> tuple[str, dict]:
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            content = response.choices[0].message.content
             usage = {
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
+                "input_tokens": response.usage.prompt_tokens,
+                "output_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens
             }
             return content, usage
-        else:
-            logging.error(f"DashScope Error: {response.code} - {response.message}")
+        except Exception as e:
+            logging.exception("Exception during OpenAI call")
             return None, None
-    except Exception as e:
-        logging.exception("Exception during DashScope call")
-        return None, None
+
+def get_llm_provider() -> LLMProvider:
+    provider_name = os.getenv("LLM_PROVIDER", "dashscope").lower()
+    if provider_name == "openai":
+        return OpenAIProvider()
+    # Default to DashScope
+    return DashScopeProvider()
+
+# Singleton instance initialized on module load
+_llm_instance = get_llm_provider()
+
+def generate_completion(prompt: str, system_prompt: str = "Eres un experto en pedagogía y diseño de instrumentos de evaluación."):
+    """
+    Calls the configured LLM API (via LLM_PROVIDER env var) for text generation.
+    Returns (content, usage)
+    """
+    return _llm_instance.generate_completion(prompt, system_prompt)
 
 def classify_feedback(feedback_text: str) -> str:
     """
