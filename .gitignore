@@ -1,9 +1,21 @@
+# Environment (contains passwords, API keys, proxy config)
 .env
-src/
+
+# Moodle data
 moodledata/
+
+# Python cache
 *.pyc
+__pycache__/
 areteia_ai/.fastembed_cache/
-*.md
+
+# Sync data
 areteia_ai/data/sync/*
-123docker-compose
+data/sync/*
+
+# Build artifacts
 areteia_plugin.zip
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,16 +1,26 @@
 name: areteia_ai
-
 services:
   python_rag:
-    build: ./areteia_ai
+    build:
+      context: ./areteia_ai
+      args:
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
     container_name: python_rag
     restart: unless-stopped
     ports:
       - "8000:8000"
+    environment:
+      - http_proxy=${HTTP_PROXY:-}
+      - https_proxy=${HTTPS_PROXY:-}
+      - no_proxy=localhost,127.0.0.1
+      - HF_TOKEN=${HF_TOKEN}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DASHSCOPE_MODEL=${DASHSCOPE_MODEL}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL}
     env_file: .env
     volumes:
       - ./areteia_ai:/app
       - hf_cache:/root/.cache/huggingface
-
 volumes:
   hf_cache:
