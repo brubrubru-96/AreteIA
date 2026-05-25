@@ -1,8 +1,8 @@
 FROM python:3.11.9-slim
 
-ENV http_proxy=http://proxy.fi.uba.ar:8080 \
-    https_proxy=http://proxy.fi.uba.ar:8080 \
-    no_proxy=localhost,127.0.0.1
+# ENV http_proxy=http://proxy.fi.uba.ar:8080 \
+#     https_proxy=http://proxy.fi.uba.ar:8080 \
+#     no_proxy=localhost,127.0.0.1
 
 WORKDIR /app
 
@@ -16,4 +16,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
