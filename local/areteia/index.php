@@ -51,6 +51,8 @@ require_once($CFG->dirroot . '/course/lib.php');
 require_once($CFG->libdir . '/questionlib.php');
 
 $context = context_course::instance($id);
+require_capability('local/areteia:use', $context);
+
 $PAGE->set_url(new moodle_url('/local/areteia/index.php', [
     'id'     => $id, 
     'step'   => $step, 

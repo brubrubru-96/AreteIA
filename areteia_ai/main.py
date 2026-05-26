@@ -299,7 +299,12 @@ async def _prepare_prompt_data(request: GenerateRequest):
             instr_list_str = "\n".join([f"- {instr['name']}: {instr['definition'][:200]}..." for instr in master_instruments])
             extended_context = f"{full_context}\n\nLISTA DE INSTRUMENTOS DISPONIBLES (ELIGE SOLO DE AQUÍ):\n{instr_list_str}"
             
-            prompt = get_suggestions_prompt(request.summary, request.objective, dimensions, extended_context, request.feedback)
+            prompt = get_suggestions_prompt(
+                request.summary, request.objective, dimensions, extended_context, request.feedback,
+                d1_content=request.d1_content,
+                d3_function=request.d3_function,
+                d4_modality=request.d4_modality,
+            )
             schema = SuggestionsResponse
         elif request.step == 5:
             # 1. Load Instrument Document & Resolve ID
@@ -353,7 +358,11 @@ async def _prepare_prompt_data(request: GenerateRequest):
                 num_items=request.num_items,
                 valid_types=valid_types,
                 feedback=request.feedback,
-                current_design=request.instrument_content
+                current_design=request.instrument_content,
+                d1_content=request.d1_content,
+                d3_function=request.d3_function,
+                d4_modality=request.d4_modality,
+                instrument_id=chosen_id or "",
             )
             schema = InstrumentDesign
         elif request.step == 6:
