@@ -563,7 +563,14 @@ class step7 {
             echo html_writer::tag('strong', '🎯 ¡Cuestionario publicado en Moodle!', [
                 'style' => 'color:#28a745; display:block; margin-bottom:5px;',
             ]);
-            echo html_writer::tag('p', '3 preguntas creadas correctamente.', [
+            $sel_raw = session_manager::get('final_selection_json', '');
+            $sel_count = 0;
+            if (!empty($sel_raw)) {
+                $sel_parsed = json_decode($sel_raw, true);
+                $sel_count = count($sel_parsed['items'] ?? []);
+            }
+            $q_label = $sel_count > 0 ? "$sel_count " . ($sel_count === 1 ? 'pregunta creada' : 'preguntas creadas') . ' correctamente.' : 'Preguntas creadas correctamente.';
+            echo html_writer::tag('p', $q_label, [
                 'style' => 'font-size:12px; margin-bottom:10px;',
             ]);
             if ($quiz_cmid) {

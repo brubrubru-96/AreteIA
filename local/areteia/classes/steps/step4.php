@@ -196,14 +196,16 @@ class step4 {
             $num_items_label   = '¿Cuántas consignas/tareas?';
             $num_items_default = 5;
 
-            // Instruments that produce a single holistic task — num_items not applicable
-            $fixed_patterns = ['resumen', 'esquema', 'mapa conceptual'];
+            // Instruments with a fully predefined template structure — num_items not applicable
+            $fixed_patterns = [
+                'resumen', 'esquema', 'mapa conceptual', 'monograf',
+                'estudio de caso', 'escape room', 'simulaci',
+                'evaluación oral', 'evaluacion oral',
+                'evaluación auténtica', 'evaluacion autentica',
+                'aprendizaje servicio', 'portafolio', 'juego de rol',
+            ];
             foreach ($fixed_patterns as $fp) {
                 if (mb_strpos($name_lower, $fp) !== false) { $hide_num_items = true; break; }
-            }
-            // Monografía is also a single-document instrument
-            if (!$hide_num_items && (mb_strpos($name_lower, 'monograf') !== false)) {
-                $hide_num_items = true;
             }
             // Adapt label for quiz-style instruments
             if (!$hide_num_items) {

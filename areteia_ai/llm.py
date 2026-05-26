@@ -167,11 +167,14 @@ El instrumento debe incluir:
 
     "estudio-caso": """\
 **ESTRUCTURA OBLIGATORIA — ESTUDIO DE CASO (modelo Wassermann):**
-Generá el caso completo con estos componentes como ítems separados:
-1. **Narrativa del caso** — Una historia breve (3-5 párrafos) basada en una situación real o verosímil del campo profesional, con datos suficientes para el análisis. La narrativa debe contener información relevante e irrelevante para que el estudiante discrimine.
-2. **Preguntas críticas** — Una lista de preguntas que obliguen a ANALIZAR, no a recordar (al menos 4 preguntas, niveles Bloom ANALIZAR/EVALUAR/CREAR).
-3. **Dinámica de trabajo** — Instrucciones para el trabajo en pequeños grupos y la instancia de plenario.
-4. **Criterios de evaluación** — Qué se evaluará: capacidad de delimitar el problema, identificar datos relevantes, proponer alternativas fundamentadas.""",
+│ CAMPO "scenario": CONTIENE la narrativa completa del caso (historia realista y detallada de
+│   3-5 párrafos basada en el campo profesional, con datos suficientes y algunos irrelevantes
+│   para que el estudiante discrimine). NUNCA pongas la narrativa en los ítems.
+│ ITEMS: Cada uno es una TAREA o PREGUNTA sobre el caso narrado en el scenario.
+Componentes obligatorios como ítems (tipo “Ensayo / Respuesta abierta”):
+1. **Preguntas críticas de análisis** — Preguntas que obliguen a ANALIZAR el caso, no a recordar (niveles Bloom ANALIZAR/EVALUAR/CREAR).
+2. **Dinámica de trabajo** — Instrucciones claras para trabajo en pequeños grupos y plenario.
+3. **Criterios de evaluación** — Qué se evaluará: delimitar el problema, identificar datos relevantes, proponer alternativas fundamentadas.""",
 
     "ev-oral": """\
 **ESTRUCTURA OBLIGATORIA — EVALUACIÓN ORAL:**
@@ -416,18 +419,34 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
     scenario_json_field = ""
     if needs_scenario:
         scenario_instruction = f"""
-  ### CAMPO "scenario" — OBLIGATORIO PARA ESTE INSTRUMENTO:
-  Este instrumento ({chosen_instrument}) REQUIERE un escenario/contexto narrativo COMPLETO que el estudiante
-  leerá ANTES de responder los ítems.
-  - Escribí en el campo "scenario" un texto narrativo completo (3-6 párrafos) que presente la situación,
-    el caso, el problema, o el contexto con todos los datos necesarios para responder.
-  - Los ítems deben referirse a ESE escenario, NO deben repetirlo ni asumir que el estudiante ya lo conoce.
-  - SIN un escenario completo, el instrumento es inválido. NO lo dejes vacío.
+  ### CAMPO "scenario" — OBLIGATORIO PARA ESTE INSTRUMENTO (PRIORIDAD MÁXIMA):
+  Este instrumento ({chosen_instrument}) REQUIERE un escenario/contexto narrativo RICO, DENSO y DETALLADO.
+  El estudiante leerá ÚNICAMENTE este campo antes de responder. REQUISITOS MÍNIMOS (sin excepción):
+
+  - **Extensión**: mínimo 4 párrafos densos. Un escenario de menos de 3 párrafos es INVÁLIDO.
+  - **Sujeto concreto**: incluí un personaje, grupo o situación con nombre o identificación y contexto específico (puede ser una persona, un equipo, una organización, una comunidad, etc.).
+  - **Datos factuales**: fechas, cifras, circunstancias concretas que sitúen la situación con precisión.
+  - **Tensión o dilema**: una situación problemática que requiera análisis, no solo descripción.
+  - **Información mixta**: datos relevantes entremezclados con detalles que el estudiante debe discriminar.
+  - **Vocabulario técnico** del campo disciplinar presente en los materiales del curso.
+  - **Estilo**: narrativo y realista, como un caso profesional auténtico, no un enunciado genérico.
+
+  Los ítems SE REFIEREN a este escenario. NUNCA repitas el escenario dentro de un ítem.
+  Escribí primero el escenario completo antes de pensar en los ítems.
 """
-        scenario_json_field = '\n    "scenario": "Texto narrativo completo del caso/escenario/contexto (3-6 párrafos). OBLIGATORIO para este instrumento.",'
+        scenario_json_field = '\n    "scenario": "NARRATIVA COMPLETA: mínimo 4 párrafos con personaje concreto, datos factuales, tensión/dilema y vocabulario técnico. Este campo es el núcleo del instrumento.",'
+
+    # For template-driven instruments, tell the model to follow the template count, not num_items
+    has_template = instrument_id in INSTRUMENT_SPECIFIC_TEMPLATES
+    items_rule = (
+        f"Generá EXACTAMENTE los componentes definidos en la GUÍA ESPECÍFICA DEL INSTRUMENTO "
+        f"(ignorá el número {num_items} — la guía define la estructura completa)."
+        if has_template else
+        f"Generá exactamente {num_items} ítems/componentes."
+    )
 
     return f"""### TAREA A REALIZAR:
-  Diseñar {num_items} ítems/componentes de evaluación para un instrumento de tipo: {chosen_instrument}.
+  Diseñar ítems/componentes de evaluación para un instrumento de tipo: {chosen_instrument}.
 
   **Descripción del instrumento:**
   {instrument_desc}
@@ -448,16 +467,16 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
   {current_design_sect}
 
   ### REQUISITOS DE CALIDAD Y FORMATO:
-  1. Generá exactamente {num_items} ítems/componentes. Si el instrumento tiene una estructura específica definida en "GUÍA ESPECÍFICA DEL INSTRUMENTO", cada componente obligatorio cuenta como un ítem.
+  1. {items_rule}
   2. Cada ítem debe usar OBLIGATORIAMENTE uno de los "TIPOS DE PREGUNTAS PERMITIDOS". El campo "type" debe coincidir EXACTAMENTE con el nombre del tipo.
   3. Para cada ítem, identificá qué objetivos específicos está cubriendo.
   4. **Estructura JSON por tipo de pregunta y respuestas correctas**:
       - **Opción múltiple**: `consiga` (enunciado), `alternativas` (mínimo 4), `correct_index` (0-indexed).
       - **Verdadero/Falso**: `consiga` (afirmación), `correct_boolean` (true/false).
-      - **Emparejamiento / Poner en orden**: `consiga` y lista `pairs` con `{{"premise": "...", "answer": "..."}}`.
+      - **Emparejamiento / Poner en orden**: `consiga` y lista `pairs` con `{{"premise": "P1", "answer": "A1"}}`.
       - **Respuesta breve / Texto lacunar**: `consiga` y respuesta esperada en `short_answer`.
       - **Numérica**: `consiga` y valor exacto en `numerical_value`.
-      - **Ensayo / Respuesta abierta / Tarea de producción**: Orientaciones completas en `consiga`. Para instrumentos complejos (estudio de caso, debate, escape room, etc.) volcá el contenido completo del componente aquí.
+      - **Ensayo / Respuesta abierta / Tarea de producción**: Orientaciones completas en `consiga`. Para instrumentos complejos volcá el contenido del componente aquí en detalle.
   5. Redactá con rigor pedagógico y coherencia con los extractos de materiales.
   6. Asigná una dificultad ("Fácil", "Media", "Difícil").
   7. **Refinamiento parcial**: Si en "AJUSTES ESPECÍFICOS" se menciona un ítem en particular (ej: `[Ítem 1] ...`), REGENERÁ sólo ese ítem y mantené el resto exactamente igual.
