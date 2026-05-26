@@ -190,27 +190,62 @@ class step4 {
 
         // Render generation config BEFORE the navigation block
         if ($effective_sel && ($confirmed || $effective_sel === $instrument)) {
+            // Determine num_items UI behavior based on instrument name
+            $name_lower = mb_strtolower($effective_sel);
+            $hide_num_items = false;
+            $num_items_label   = '¿Cuántas consignas/tareas?';
+            $num_items_default = 5;
+
+            // Instruments that produce a single holistic task — num_items not applicable
+            $fixed_patterns = ['resumen', 'esquema', 'mapa conceptual'];
+            foreach ($fixed_patterns as $fp) {
+                if (mb_strpos($name_lower, $fp) !== false) { $hide_num_items = true; break; }
+            }
+            // Monografía is also a single-document instrument
+            if (!$hide_num_items && (mb_strpos($name_lower, 'monograf') !== false)) {
+                $hide_num_items = true;
+            }
+            // Adapt label for quiz-style instruments
+            if (!$hide_num_items) {
+                if (mb_strpos($name_lower, 'cuestionario') !== false || mb_strpos($name_lower, 'prueba mixta') !== false) {
+                    $num_items_label   = '¿Cuántas preguntas?';
+                    $num_items_default = 10;
+                } elseif (mb_strpos($name_lower, 'glosario') !== false) {
+                    $num_items_label   = '¿Cuántos términos?';
+                    $num_items_default = 8;
+                } elseif (mb_strpos($name_lower, 'oral') !== false || mb_strpos($name_lower, 'debate') !== false) {
+                    $num_items_label   = '¿Cuántas preguntas?';
+                    $num_items_default = 5;
+                }
+            }
+
             echo html_writer::start_tag('div', [
                 'id' => 'gen-config-area',
                 'style' => 'background:#f0f7ff; border:1px solid #c2e0ff; padding:20px; border-radius:12px; margin-top:20px; margin-bottom:20px; width:100%; text-align:center;'
             ]);
-            
+
             echo html_writer::tag('p', "Has seleccionado: <strong>$effective_sel</strong>", ['style' => 'margin-bottom:15px; color:#185fa5;']);
-            
+
             echo html_writer::start_tag('div', ['style' => 'display:flex; justify-content:center; align-items:center; gap:15px; flex-wrap:wrap;']);
-            echo html_writer::tag('label', '¿Cuántos ítems quieres generar?', ['for' => 'num_items_input', 'style' => 'margin-bottom:0; font-weight:bold;']);
-            echo html_writer::tag('input', '', [
-                'type'  => 'number',
-                'id'    => 'num_items_input',
-                'class' => 'form-control',
-                'style' => 'width:80px; text-align:center;',
-                'value' => '5',
-                'min'   => '1',
-                'max'   => '20'
-            ]);
-            
+
+            if ($hide_num_items) {
+                echo html_writer::tag('span', '📌 La estructura de este instrumento está predefinida por el tipo de actividad.',
+                    ['style' => 'color:#666; font-style:italic; font-size:13px;']);
+            } else {
+                echo html_writer::tag('label', $num_items_label, ['for' => 'num_items_input', 'style' => 'margin-bottom:0; font-weight:bold;']);
+                echo html_writer::tag('input', '', [
+                    'type'  => 'number',
+                    'id'    => 'num_items_input',
+                    'class' => 'form-control',
+                    'style' => 'width:80px; text-align:center;',
+                    'value' => (string)$num_items_default,
+                    'min'   => '1',
+                    'max'   => '20'
+                ]);
+            }
+
             echo step_renderer::render_preview_button(5);
-            
+
             echo html_writer::end_tag('div');
             echo html_writer::end_tag('div');
         }

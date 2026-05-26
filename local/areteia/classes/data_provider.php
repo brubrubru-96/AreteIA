@@ -830,21 +830,43 @@ class data_provider {
      * @return object The created course module info
      */
     public static function create_assign_activity($courseid, $name, $description) {
+        return self::create_assign_activity_in_section($courseid, 0, $name, $description);
+    }
+
+    /**
+     * Create a new Moodle Assign activity in a specific course section.
+     *
+     * @param int    $courseid
+     * @param int    $section_num  Target section number (0 = first available non-zero section)
+     * @param string $name
+     * @param string $description
+     * @return object The created course module info
+     */
+    public static function create_assign_activity_in_section($courseid, $section_num, $name, $description) {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/course/lib.php');
         
         $course = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
         $module = $DB->get_record('modules', ['name' => 'assign'], '*', MUST_EXIST);
         
-        // Find or create a valid section
+        // Find a valid section: use $section_num if given, otherwise first non-zero section
         $modinfo = get_fast_modinfo($course);
         $sections = $modinfo->get_section_info_all();
         $sectionid = 0;
+        $sectionnum = 1;
         foreach ($sections as $s) {
-            if ($s->section > 0) {
-                $sectionid = $s->id;
-                $sectionnum = $s->section;
-                break;
+            if ($section_num > 0) {
+                if ($s->section == $section_num) {
+                    $sectionid  = $s->id;
+                    $sectionnum = $s->section;
+                    break;
+                }
+            } else {
+                if ($s->section > 0) {
+                    $sectionid  = $s->id;
+                    $sectionnum = $s->section;
+                    break;
+                }
             }
         }
         

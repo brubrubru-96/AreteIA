@@ -376,6 +376,19 @@ def get_suggestions_prompt(course_summary, objective, dimensions, full_context, 
     ]
   }}"""
 
+# Instruments that require a narrative scenario/context SEPARATE from items.
+# For these instruments the LLM must populate the top-level "scenario" field with the
+# full narrative/context text so it renders prominently in the UI before the task items.
+SCENARIO_INSTRUMENTS = {
+    "estudio-caso",    # Case study narrative (Wassermann structure)
+    "debate",          # Topic framing + context
+    "escape-room",     # World/mission narrative
+    "rol",             # Role description + situational context
+    "aps",             # Community situation description
+    "analisis-fuentes", # Source corpus + situating problem
+    "ev-autentica",    # Rol + Audiencia + Tema + Formato (RAFT structure)
+}
+
 def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, num_items=5,
                       valid_types=None, feedback="", current_design=None,
                       d1_content="", d3_function="", d4_modality="", instrument_id=""):
@@ -397,6 +410,22 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
     instr_guidance = INSTRUMENT_SPECIFIC_TEMPLATES.get(instrument_id, "")
     instr_guidance_sect = f"\n### GUÍA ESPECÍFICA DEL INSTRUMENTO (OBLIGATORIA):\n{instr_guidance}\n" if instr_guidance else ""
 
+    # Scenario field instructions for narrative-based instruments
+    needs_scenario = instrument_id in SCENARIO_INSTRUMENTS
+    scenario_instruction = ""
+    scenario_json_field = ""
+    if needs_scenario:
+        scenario_instruction = f"""
+  ### CAMPO "scenario" — OBLIGATORIO PARA ESTE INSTRUMENTO:
+  Este instrumento ({chosen_instrument}) REQUIERE un escenario/contexto narrativo COMPLETO que el estudiante
+  leerá ANTES de responder los ítems.
+  - Escribí en el campo "scenario" un texto narrativo completo (3-6 párrafos) que presente la situación,
+    el caso, el problema, o el contexto con todos los datos necesarios para responder.
+  - Los ítems deben referirse a ESE escenario, NO deben repetirlo ni asumir que el estudiante ya lo conoce.
+  - SIN un escenario completo, el instrumento es inválido. NO lo dejes vacío.
+"""
+        scenario_json_field = '\n    "scenario": "Texto narrativo completo del caso/escenario/contexto (3-6 párrafos). OBLIGATORIO para este instrumento.",'
+
     return f"""### TAREA A REALIZAR:
   Diseñar {num_items} ítems/componentes de evaluación para un instrumento de tipo: {chosen_instrument}.
 
@@ -406,6 +435,7 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
   ### REGLAS PEDAGÓGICAS DE REDACCIÓN (PRIORIDAD MÁXIMA — APLICÁ SIEMPRE):
   Estas reglas determinan el TONO, la GRAMÁTICA y la ESTRUCTURA de TODAS las consignas:{dim_rules_sect}
   {instr_guidance_sect}
+  {scenario_instruction}
 
   ### OBJETIVOS DE LA EVALUACIÓN (CON EXTRACTOS DE MATERIALES DEL CURSO):
   {structured_materials}
@@ -434,7 +464,7 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
 
   ### FORMATO DE RESPUESTA (JSON ÚNICAMENTE):
   {{
-    "title": "Título descriptivo del instrumento",
+    "title": "Título descriptivo del instrumento",{scenario_json_field}
     "items": [
       {{
         "type": "Nombre exacto del tipo",

@@ -29,6 +29,7 @@ class InstrumentItem(BaseModel):
 
 class InstrumentDesign(BaseModel):
     title: str
+    scenario: Optional[str] = None  # Narrative/context for case study, debate, escape room, etc.
     items: List[InstrumentItem]
     justification: str
 

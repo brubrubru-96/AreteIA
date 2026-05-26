@@ -52,6 +52,15 @@ class action_handler {
                 self::handle_inject_quiz($course_id, $base_url, $is_ajax);
                 return true;
 
+            case 'inject_assign':
+                require_sesskey();
+                self::handle_inject_assign($course_id, $base_url, $is_ajax);
+                return true;
+
+            case 'export_pdf':
+                self::handle_export_pdf($course_id);
+                return true;
+
             default:
                 return false;
         }
@@ -98,6 +107,9 @@ class action_handler {
         $selected_files_raw = optional_param('selected_files', '', PARAM_RAW);
         error_log("[AreteIA] handle_ingest course={$course_id} selected_files_raw=" . substr($selected_files_raw, 0, 300));
 
+        // Always define base_sync_dir (used below regardless of branch taken)
+        $base_sync_dir = rtrim($CFG->dataroot . '/areteia_sync/course_' . $course_id, '/');
+
         if (!empty($selected_files_raw)) {
             $selected_files = json_decode($selected_files_raw, true);
 
@@ -108,8 +120,6 @@ class action_handler {
                 }, $selected_files);
 
                 error_log("[AreteIA] Selected files (" . count($selected_files) . "): " . implode(', ', $selected_files));
-
-                $base_sync_dir = rtrim($CFG->dataroot . '/areteia_sync/course_' . $course_id, '/');
 
                 if (file_exists($base_sync_dir)) {
                     $directory = new \RecursiveDirectoryIterator($base_sync_dir, \RecursiveDirectoryIterator::SKIP_DOTS);
@@ -284,6 +294,72 @@ class action_handler {
     }
 
     /**
+     * Create a Moodle Assignment (Tarea con entrega) from the selected items + scenario.
+     * Used for non-quiz instruments (essays, case studies, debates, etc.).
+     */
+    private static function handle_inject_assign(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
+        $section_num = optional_param('section_num', 0, PARAM_INT);
+
+        // Get selected items from session
+        $raw_selection = session_manager::get('final_selection_json', '');
+        if (empty($raw_selection)) {
+            $redir = new \moodle_url($base_url, ['step' => 5, 'assign_error' => 1]);
+            redirect($redir);
+        }
+
+        $parsed = json_decode($raw_selection, true);
+        $title  = $parsed['title'] ?? (session_manager::get('instrument', '') . ' - AreteIA');
+        $items  = $parsed['items'] ?? [];
+        $scenario = $parsed['scenario'] ?? '';
+
+        // Build a readable Markdown description for the assignment
+        $desc = "# " . $title . "\n\n";
+
+        if (!empty($scenario)) {
+            $desc .= "## 📖 Escenario\n\n" . $scenario . "\n\n---\n\n";
+        }
+
+        if (!empty($items)) {
+            $desc .= "## Consignas de Evaluación\n\n";
+            foreach ($items as $i => $item) {
+                $item_text = $item['text'] ?? $item['consiga'] ?? '';
+                $desc .= ($i + 1) . '. ' . $item_text . "\n\n";
+            }
+        }
+
+        if (!empty($parsed['justification'])) {
+            $desc .= "\n---\n*Justificación pedagógica: " . $parsed['justification'] . "*";
+        }
+
+        try {
+            $result = \local_areteia\data_provider::create_assign_activity_in_section($course_id, $section_num, $title, $desc);
+            if (!$result || !isset($result->coursemodule)) {
+                throw new \moodle_exception('error_creating_assign', 'local_areteia', '', null, 'Result is empty or invalid');
+            }
+            $assign_cmid = $result->coursemodule;
+        } catch (\Throwable $e) {
+            error_log('[AreteIA] inject_assign error in course ' . $course_id . ': ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            $redir = new \moodle_url($base_url, [
+                'step'         => 7,
+                'action'       => 'eval',
+                'assign_error' => 1,
+            ]);
+            redirect($redir);
+        }
+
+        $redir = new \moodle_url($base_url, [
+            'step'           => 7,
+            'action'         => 'eval',
+            'assign_injected'=> 1,
+            'assign_cmid'    => $assign_cmid,
+        ]);
+        if ($is_ajax) {
+            $redir->param('ajax', 1);
+        }
+        redirect($redir);
+    }
+
+    /**
      * Returns the fake questions for quiz injection.
      * Moved from step7 to action_handler for better availability.
      */
@@ -341,6 +417,136 @@ class action_handler {
 
         $res = rag_client::preview_prompt($data);
         echo json_encode($res ?: ['status' => 'error', 'message' => 'Servicio de IA no disponible']);
+        die();
+    }
+
+    /**
+     * Export the generated instrument as a printable HTML file (can also be opened in Word).
+     * No sesskey required — read-only download.
+     */
+    private static function handle_export_pdf(int $course_id): void {
+        global $CFG;
+
+        $instrument = session_manager::get('instrument', 'Instrumento AreteIA');
+        $raw        = session_manager::get('inst_content', '');
+        $data       = json_decode($raw, true) ?? [];
+
+        $title      = htmlspecialchars($data['title']   ?? $instrument, ENT_QUOTES, 'UTF-8');
+        $scenario   = $data['scenario']   ?? '';
+        $items      = $data['items']      ?? [];
+        $justif     = $data['justification'] ?? '';
+
+        $rubric_raw  = session_manager::get('rubric_content', '');
+        $rubric_data = json_decode($rubric_raw, true) ?? [];
+
+        // ── Build HTML ──────────────────────────────────────────────────
+        $date_str = date('d/m/Y');
+        $h  = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">';
+        $h .= '<title>' . $title . '</title>';
+        $h .= '<style>';
+        $h .= 'body{font-family:Georgia,serif;font-size:12pt;line-height:1.6;max-width:820px;margin:0 auto;padding:30px;color:#222;}';
+        $h .= 'h1{font-size:18pt;border-bottom:2px solid #6c63ff;padding-bottom:8px;margin-bottom:20px;color:#2d2d6d;}';
+        $h .= 'h2{font-size:13pt;color:#4a4a8a;margin-top:24px;margin-bottom:8px;}';
+        $h .= '.scenario{background:#fffbea;border-left:5px solid #f59e0b;padding:14px 18px;margin:16px 0;border-radius:4px;}';
+        $h .= '.item{border-left:3px solid #d0d0f0;padding:10px 16px;margin:10px 0;background:#fafafa;}';
+        $h .= '.item-meta{font-size:9pt;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;}';
+        $h .= 'ol{padding-left:20px;} ol li{margin-bottom:12px;}';
+        $h .= '.alts{margin-top:6px;padding-left:20px;} .alts li{margin-bottom:3px;font-size:11pt;}';
+        $h .= '.justification{font-size:10pt;color:#555;border-top:1px solid #ddd;margin-top:24px;padding-top:12px;font-style:italic;}';
+        $h .= '.rubric-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:10pt;}';
+        $h .= '.rubric-table th{background:#6c63ff;color:#fff;padding:8px;text-align:left;}';
+        $h .= '.rubric-table td{border:1px solid #ddd;padding:8px;vertical-align:top;}';
+        $h .= '.footer{font-size:9pt;color:#aaa;text-align:center;margin-top:30px;border-top:1px solid #eee;padding-top:10px;}';
+        $h .= '@media print{body{max-width:none;padding:10mm;} .footer{position:fixed;bottom:0;width:100%;}}';
+        $h .= '</style></head><body>';
+
+        $h .= '<h1>' . $title . '</h1>';
+        $h .= '<p style="font-size:10pt;color:#999;margin-top:-15px;margin-bottom:20px;">Generado con AreteIA · ' . $date_str . '</p>';
+
+        // Scenario
+        if (!empty($scenario)) {
+            $h .= '<h2>📖 Escenario / Contexto</h2>';
+            $h .= '<div class="scenario">' . nl2br(htmlspecialchars($scenario, ENT_QUOTES, 'UTF-8')) . '</div>';
+        }
+
+        // Items
+        if (!empty($items)) {
+            $h .= '<h2>📋 Consignas de Evaluación</h2><ol>';
+            foreach ($items as $item) {
+                $type   = htmlspecialchars($item['type']   ?? '', ENT_QUOTES, 'UTF-8');
+                $consig = htmlspecialchars($item['consiga'] ?? '', ENT_QUOTES, 'UTF-8');
+                $h .= '<li>';
+                if ($type) { $h .= '<div class="item-meta">' . $type . '</div>'; }
+                $h .= nl2br($consig);
+                $alts = $item['alternativas'] ?? [];
+                if (!empty($alts)) {
+                    $h .= '<ul class="alts">';
+                    foreach ($alts as $alt) {
+                        $h .= '<li>' . htmlspecialchars($alt, ENT_QUOTES, 'UTF-8') . '</li>';
+                    }
+                    $h .= '</ul>';
+                }
+                $h .= '</li>';
+            }
+            $h .= '</ol>';
+        }
+
+        // Justification
+        if (!empty($justif)) {
+            $h .= '<div class="justification"><strong>Justificación pedagógica:</strong> ';
+            $h .= htmlspecialchars($justif, ENT_QUOTES, 'UTF-8') . '</div>';
+        }
+
+        // Rubric (if present and structured)
+        $criteria = $rubric_data['criteria'] ?? ($rubric_data['items'] ?? []);
+        if (!empty($criteria)) {
+            $h .= '<h2>📊 Criterios de Evaluación</h2>';
+            $h .= '<table class="rubric-table"><thead><tr>';
+            $h .= '<th>Criterio</th><th>Descripción</th>';
+            if (!empty($criteria[0]['levels'])) { $h .= '<th>Niveles</th>'; }
+            $h .= '</tr></thead><tbody>';
+            foreach ($criteria as $crit) {
+                $h .= '<tr>';
+                $h .= '<td><strong>' . htmlspecialchars($crit['name'] ?? $crit['criterion'] ?? '', ENT_QUOTES, 'UTF-8') . '</strong></td>';
+                $h .= '<td>' . htmlspecialchars($crit['description'] ?? $crit['consiga'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
+                if (!empty($crit['levels'])) {
+                    $levels_str = implode(' / ', array_map(function($l) {
+                        return htmlspecialchars(is_array($l) ? ($l['label'] ?? $l['name'] ?? '') : $l, ENT_QUOTES, 'UTF-8');
+                    }, $crit['levels']));
+                    $h .= '<td>' . $levels_str . '</td>';
+                }
+                $h .= '</tr>';
+            }
+            $h .= '</tbody></table>';
+        }
+
+        $h .= '<div class="footer">AreteIA · Diseño de instrumentos de evaluación · ' . $date_str . '</div>';
+        $h .= '</body></html>';
+
+        // ── Try Moodle TCPDF for real PDF; fall back to HTML download ──
+        $safe_name = preg_replace('/[^a-zA-Z0-9_-]/', '_', $instrument);
+        $libpdf    = $CFG->libdir . '/pdflib.php';
+
+        if (file_exists($libpdf)) {
+            require_once($libpdf);
+            try {
+                $doc = new \pdf();
+                $doc->setPrintHeader(false);
+                $doc->setPrintFooter(false);
+                $doc->SetMargins(15, 15, 15);
+                $doc->AddPage();
+                $doc->writeHTML($h, true, false, true, false, '');
+                $doc->Output('AreteIA_' . $safe_name . '.pdf', 'D');
+                die();
+            } catch (\Throwable $e) {
+                // Fall through to HTML download
+            }
+        }
+
+        // Fallback: serve as printable HTML
+        header('Content-Type: text/html; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="AreteIA_' . $safe_name . '.html"');
+        echo $h;
         die();
     }
 }

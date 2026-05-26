@@ -121,6 +121,23 @@ class step5 {
                 $data['items'] = array_values($data['items'] ?? []);
                 
                 echo html_writer::tag('h3', $data['title'] ?? 'Propuesta de Ítems', ['style' => 'color:#185fa5; margin-bottom:15px;']);
+
+                // --- SCENARIO / NARRATIVE BOX ---
+                if (!empty($data['scenario'])) {
+                    echo html_writer::start_tag('div', [
+                        'class' => 'areteia-card',
+                        'style' => 'background:#fffbea; border-left:5px solid #f59e0b; padding:20px; margin-bottom:20px; border-radius:8px;'
+                    ]);
+                    echo html_writer::tag('div',
+                        '📖 <strong>Escenario / Contexto del Instrumento</strong>',
+                        ['style' => 'color:#92400e; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; display:block;']
+                    );
+                    echo html_writer::tag('div',
+                        format_text($data['scenario'], FORMAT_MARKDOWN),
+                        ['style' => 'font-size:14px; line-height:1.7; color:#1a1a1a;']
+                    );
+                    echo html_writer::end_tag('div');
+                }
                 
                 // Form for item selection
                 echo html_writer::start_tag('form', [
