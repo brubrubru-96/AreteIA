@@ -515,7 +515,7 @@ class step7 {
             $pdf_url->out(false),
             '⬇ Exportar consigna (PDF / Word)',
             [
-                'class'  => 'areteia-btn',
+                'class'  => 'areteia-btn external',
                 'style'  => 'background:#6c757d; border-color:#6c757d; color:#fff; font-size:12px;',
                 'target' => '_blank',
                 'title'  => 'Descarga el instrumento como archivo imprimible. Abrilo en el navegador e imprimí como PDF, o importalo en Word.',
