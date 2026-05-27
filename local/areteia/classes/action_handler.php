@@ -57,6 +57,11 @@ class action_handler {
                 self::handle_inject_assign($course_id, $base_url, $is_ajax);
                 return true;
 
+            case 'inject_forum':
+                require_sesskey();
+                self::handle_inject_forum($course_id, $base_url, $is_ajax);
+                return true;
+
             case 'export_pdf':
                 self::handle_export_pdf($course_id);
                 return true;
@@ -293,71 +298,6 @@ class action_handler {
         redirect($redir);
     }
 
-    /**
-     * Create a Moodle Assignment (Tarea con entrega) from the selected items + scenario.
-     * Used for non-quiz instruments (essays, case studies, debates, etc.).
-     */
-    private static function handle_inject_assign(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
-        $section_num = optional_param('section_num', 0, PARAM_INT);
-
-        // Get selected items from session
-        $raw_selection = session_manager::get('final_selection_json', '');
-        if (empty($raw_selection)) {
-            $redir = new \moodle_url($base_url, ['step' => 5, 'assign_error' => 1]);
-            redirect($redir);
-        }
-
-        $parsed = json_decode($raw_selection, true);
-        $title  = $parsed['title'] ?? (session_manager::get('instrument', '') . ' - AreteIA');
-        $items  = $parsed['items'] ?? [];
-        $scenario = $parsed['scenario'] ?? '';
-
-        // Build a readable Markdown description for the assignment
-        $desc = "# " . $title . "\n\n";
-
-        if (!empty($scenario)) {
-            $desc .= "## 📖 Escenario\n\n" . $scenario . "\n\n---\n\n";
-        }
-
-        if (!empty($items)) {
-            $desc .= "## Consignas de Evaluación\n\n";
-            foreach ($items as $i => $item) {
-                $item_text = $item['text'] ?? $item['consiga'] ?? '';
-                $desc .= ($i + 1) . '. ' . $item_text . "\n\n";
-            }
-        }
-
-        if (!empty($parsed['justification'])) {
-            $desc .= "\n---\n*Justificación pedagógica: " . $parsed['justification'] . "*";
-        }
-
-        try {
-            $result = \local_areteia\data_provider::create_assign_activity_in_section($course_id, $section_num, $title, $desc);
-            if (!$result || !isset($result->coursemodule)) {
-                throw new \moodle_exception('error_creating_assign', 'local_areteia', '', null, 'Result is empty or invalid');
-            }
-            $assign_cmid = $result->coursemodule;
-        } catch (\Throwable $e) {
-            error_log('[AreteIA] inject_assign error in course ' . $course_id . ': ' . $e->getMessage() . "\n" . $e->getTraceAsString());
-            $redir = new \moodle_url($base_url, [
-                'step'         => 7,
-                'action'       => 'eval',
-                'assign_error' => 1,
-            ]);
-            redirect($redir);
-        }
-
-        $redir = new \moodle_url($base_url, [
-            'step'           => 7,
-            'action'         => 'eval',
-            'assign_injected'=> 1,
-            'assign_cmid'    => $assign_cmid,
-        ]);
-        if ($is_ajax) {
-            $redir->param('ajax', 1);
-        }
-        redirect($redir);
-    }
 
     /**
      * Returns the fake questions for quiz injection.
@@ -386,6 +326,146 @@ class action_handler {
                 'text' => 'Describe como diseñarias una evaluacion autentica para tu asignatura. Fundamenta tu respuesta considerando el contexto pedagogico del curso.',
             ],
         ];
+    }
+
+    /**
+     * Export the generated instrument as an Assign activity (with section selection).
+     */
+    private static function handle_inject_assign(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
+        $section_num = optional_param('section_num', 0, PARAM_INT);
+        $inst_name = session_manager::get('instrument', '') . ' - AreteIA';
+        $inst_content = session_manager::get('inst_content', '');
+        $rubric_content = session_manager::get('rubric_content', '');
+
+        // Build a rich description from the instrument items
+        $description = self::build_activity_description($inst_content, $rubric_content);
+
+        if (!$inst_name || $inst_name === ' - AreteIA') {
+            $inst_name = 'Evaluación AreteIA';
+        }
+
+        try {
+            $moduleinfo = data_provider::create_assign_activity($course_id, $inst_name, $description, $section_num);
+            $cmid = $moduleinfo->coursemodule;
+        } catch (\Throwable $e) {
+            error_log('[AreteIA] inject_assign error: ' . $e->getMessage());
+            $redir = new \moodle_url($base_url, [
+                'step'       => 7,
+                'action'     => 'eval',
+                'export_error' => 1,
+            ]);
+            redirect($redir);
+        }
+
+        $redir = new \moodle_url($base_url, [
+            'step'          => 7,
+            'action'        => 'eval',
+            'assign_injected' => 1,
+            'assign_cmid'   => $cmid,
+        ]);
+        if ($is_ajax) {
+            $redir->param('ajax', 1);
+        }
+        redirect($redir);
+    }
+
+    /**
+     * Export the generated instrument as a Forum activity (with section selection).
+     */
+    private static function handle_inject_forum(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
+        $section_num = optional_param('section_num', 0, PARAM_INT);
+        $inst_name = session_manager::get('instrument', '') . ' - AreteIA';
+        $inst_content = session_manager::get('inst_content', '');
+        $rubric_content = session_manager::get('rubric_content', '');
+
+        $description = self::build_activity_description($inst_content, $rubric_content);
+
+        if (!$inst_name || $inst_name === ' - AreteIA') {
+            $inst_name = 'Debate AreteIA';
+        }
+
+        try {
+            $moduleinfo = data_provider::create_forum_activity($course_id, $inst_name, $description, $section_num);
+            $cmid = $moduleinfo->coursemodule;
+        } catch (\Throwable $e) {
+            error_log('[AreteIA] inject_forum error: ' . $e->getMessage());
+            $redir = new \moodle_url($base_url, [
+                'step'       => 7,
+                'action'     => 'eval',
+                'export_error' => 1,
+            ]);
+            redirect($redir);
+        }
+
+        $redir = new \moodle_url($base_url, [
+            'step'          => 7,
+            'action'        => 'eval',
+            'forum_injected' => 1,
+            'forum_cmid'    => $cmid,
+        ]);
+        if ($is_ajax) {
+            $redir->param('ajax', 1);
+        }
+        redirect($redir);
+    }
+
+    /**
+     * Build a rich Markdown description from the structured instrument content.
+     */
+    private static function build_activity_description(string $inst_content, string $rubric_content): string {
+        $parts = [];
+        $data = @json_decode($inst_content, true);
+
+        if (is_array($data)) {
+            if (!empty($data['title'])) {
+                $parts[] = '## ' . $data['title'];
+            }
+
+            foreach (($data['items'] ?? []) as $idx => $item) {
+                $num = $idx + 1;
+                $type_label = $item['type'] ?? 'Ítem';
+                $difficulty = $item['difficulty'] ?? '';
+                $header = "### Ítem {$num} — {$type_label}";
+                if ($difficulty) {
+                    $header .= " ({$difficulty})";
+                }
+                $parts[] = $header;
+                $parts[] = $item['consiga'] ?? $item['text'] ?? '';
+
+                // Add options if present (for reference)
+                if (!empty($item['alternativas'])) {
+                    $parts[] = '';
+                    foreach ($item['alternativas'] as $oi => $opt) {
+                        $letter = chr(65 + $oi); // A, B, C, ...
+                        $parts[] = "{$letter}. {$opt}";
+                    }
+                }
+
+                // Add objectives
+                if (!empty($item['objectives'])) {
+                    $parts[] = '';
+                    $parts[] = '**Objetivos:** ' . implode(', ', $item['objectives']);
+                }
+                $parts[] = ''; // spacer
+            }
+
+            if (!empty($data['justification'])) {
+                $parts[] = '---';
+                $parts[] = '**Justificación Pedagógica:** ' . $data['justification'];
+            }
+        } else {
+            // Fallback: use raw content as-is
+            $parts[] = $inst_content ?: 'Instrumento generado por AreteIA.';
+        }
+
+        if (!empty($rubric_content)) {
+            $parts[] = '';
+            $parts[] = '---';
+            $parts[] = '## Rúbrica';
+            $parts[] = $rubric_content;
+        }
+
+        return implode("\n", $parts);
     }
 
     /**
