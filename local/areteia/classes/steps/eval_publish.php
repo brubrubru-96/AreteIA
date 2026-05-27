@@ -8,109 +8,14 @@ use moodle_url;
 use local_areteia\session_manager;
 use local_areteia\data_provider;
 use local_areteia\step_renderer;
-use local_areteia\encaje_table;
 
 /**
- * Step 7 — Resultado final.
+ * eval_publish — Resultado final y publicación de evaluación (Action: eval, Step: 3).
  * Preview of the complete instrument and export to Moodle.
  */
-class step7 {
+class eval_publish {
 
     public static function render(array $ctx): void {
-        $action = $ctx['action'] ?? 'eval';
-
-        if ($action === 'crit') {
-            self::render_crit($ctx);
-        } else {
-            self::render_eval($ctx);
-        }
-    }
-
-    // ==================================================================
-    // ACTION = crit — Final Correction Instrument View
-    // ==================================================================
-
-    private static function render_crit(array $ctx): void {
-        global $PAGE;
-
-        $id = $ctx['id'];
-        $instrument = session_manager::get('instrument', '');
-        $correction = session_manager::get('correction_instrument', '');
-        $correction_content = session_manager::get('correction_content', '');
-        $link_params = ['id' => $id, 'action' => 'crit'];
-
-        $corr_label = encaje_table::LABELS[$correction] ?? $correction;
-        $corr_icon = encaje_table::ICONS[$correction] ?? '📄';
-
-        echo html_writer::tag('p', 'Instrumento de corrección finalizado', ['class' => 'areteia-stitle']);
-
-        // Guard
-        if (empty($correction_content)) {
-            echo html_writer::tag('div', 'No hay instrumento de corrección generado. Vuelve al paso anterior.', ['class' => 'alert alert-warning']);
-            $prev_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 6]));
-            step_renderer::render_nav(7, $prev_url);
-            return;
-        }
-
-        // Summary header
-        echo html_writer::start_tag('div', [
-            'class' => 'areteia-card',
-            'style' => 'background:#f0f4ff; border:1px solid #d0d8f0; padding:15px; margin-bottom:20px;'
-        ]);
-        echo html_writer::tag('div', "📝 Evaluación: <strong>$instrument</strong>", ['style' => 'font-size:13px; color:#555; margin-bottom:5px;']);
-        echo html_writer::tag('div', "$corr_icon Corrección: <strong>$corr_label</strong>", ['style' => 'font-size:13px; color:#2e7d32;']);
-        echo html_writer::end_tag('div');
-
-        // Render the correction instrument
-        echo html_writer::start_tag('div', [
-            'class' => 'areteia-card',
-            'style' => 'padding:20px; margin-bottom:20px;'
-        ]);
-
-        $data = json_decode($correction_content, true);
-        if (is_array($data)) {
-            // Title
-            if (!empty($data['title'])) {
-                echo html_writer::tag('h3', s($data['title']), ['style' => 'color:#185fa5; margin-bottom:15px;']);
-            }
-
-            // Use step6 renderers (they are the same class namespace)
-            step6::render_correction_public($correction, $data);
-
-            // Justification
-            if (!empty($data['justification'])) {
-                echo html_writer::start_tag('div', ['style' => 'font-size:12px; color:#666; font-style:italic; padding:15px; background:#f9f9f9; border-radius:10px; margin-top:20px; border:1px solid #eee;']);
-                echo html_writer::tag('strong', '💡 Justificación Pedagógica: ', ['style' => 'color:#185fa5;']);
-                echo s($data['justification'] ?? '');
-                echo html_writer::end_tag('div');
-            }
-        } else {
-            echo html_writer::tag('div', 'Error decodificando el instrumento.', ['class' => 'alert alert-danger']);
-        }
-
-        echo html_writer::end_tag('div');
-
-        // Completion banner
-        echo html_writer::start_tag('div', [
-            'class' => 'areteia-card',
-            'style' => 'border-left:5px solid #28a745; background:#f4fff4; padding:15px;'
-        ]);
-        echo html_writer::tag('strong', '✅ Instrumento de corrección completado', ['style' => 'color:#28a745; display:block; margin-bottom:5px;']);
-        echo html_writer::tag('p', 'Tu instrumento de corrección está listo. Puedes volver al paso anterior para refinarlo o usar la evaluación en tu curso.', [
-            'style' => 'font-size:12px; margin:0; color:#555;'
-        ]);
-        echo html_writer::end_tag('div');
-
-        // Navigation
-        $prev_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 6]));
-        step_renderer::render_nav(7, $prev_url, null, '', [], '✔ Completado');
-    }
-
-    // ==================================================================
-    // ACTION = eval — Quiz Injection (existing, unchanged)
-    // ==================================================================
-
-    private static function render_eval(array $ctx): void {
         global $PAGE;
 
         // Capture incoming form submission from Step 5
@@ -139,7 +44,7 @@ class step7 {
 
             // If we still don't have data, we can't process filtered items
             if (!is_array($data) || empty($data['items'])) {
-                error_log("[AreteIA] Failed to resolve source data for step 7");
+                error_log("[AreteIA] Failed to resolve source data for eval_publish");
             } else {
                 $filtered_items = [];
                 $num_sel = count($selected_indices);
@@ -156,9 +61,10 @@ class step7 {
                         $t = strtolower($item['type'] ?? '');
                         
                         $q = [
-                            'text' => $item['consiga'] ?? '',
+                            'text' => $item['consigna'] ?? $item['consiga'] ?? '',
                             'points' => $item['points'] ?? ($num_sel > 0 ? $default_weights[$current_idx] : 1.0),
-                            'difficulty' => $item['difficulty'] ?? 'Media'
+                            'difficulty' => $item['difficulty'] ?? 'Media',
+                            'objectives' => $item['objectives'] ?? []
                         ];
                         $current_idx++;
                         
@@ -174,6 +80,9 @@ class step7 {
                             $q['pairs'] = array_map(function($p) {
                                 return ['premise' => $p['premise'] ?? '', 'answer' => $p['answer'] ?? ''];
                             }, $item['pairs'] ?? []);
+                        } elseif (strpos($t, 'lacunar') !== false || strpos($t, 'lacun') !== false || strpos($t, 'cloze') !== false || strpos($t, 'embedded') !== false) {
+                            $q['type'] = 'multianswer';
+                            $q['cloze_answer'] = $item['short_answer'] ?? '';
                         } elseif (strpos($t, 'breve') !== false || strpos($t, 'clásica') !== false) {
                             $q['type'] = 'shortanswer';
                             $q['correct'] = $item['short_answer'] ?? '';
@@ -250,7 +159,6 @@ class step7 {
             ]);
             echo html_writer::start_tag('form', ['id' => 'quiz-config-form', 'method' => 'POST', 'action' => $inject_url->out(false)]);
             echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-            // selection_json removed - now using session_manager directly in backend to avoid POST bloat
 
             echo html_writer::start_tag('div', [
                 'style' => 'background:#fcfcfc; padding:15px; border-radius:8px; border:1px solid #eee; max-height:400px; overflow-y:auto;'
@@ -335,6 +243,17 @@ class step7 {
             echo html_writer::end_tag('select');
             echo html_writer::end_tag('div');
 
+            $student_pdf_url = new moodle_url($PAGE->url, [
+                'action'  => 'pdf_export_student',
+                'id'      => $ctx['id'],
+                'sesskey' => sesskey()
+            ]);
+            $teacher_pdf_url = new moodle_url($PAGE->url, [
+                'action'  => 'pdf_export_teacher',
+                'id'      => $ctx['id'],
+                'sesskey' => sesskey()
+            ]);
+
             if ($quiz_injected != 1) {
                 echo html_writer::tag('button', '🚀 Publicar Cuestionario en Moodle', [
                     'id'    => 'btn-publish-quiz',
@@ -346,6 +265,37 @@ class step7 {
             echo html_writer::end_tag('div'); // flex container
 
             echo html_writer::end_tag('form'); // end quiz form
+
+            echo html_writer::start_tag('div', ['style' => 'display:flex; gap:10px; margin-top:15px;']);
+            $student_docx_url = new moodle_url($PAGE->url, [
+                'action'  => 'docx_export_student',
+                'id'      => $ctx['id'],
+                'sesskey' => sesskey()
+            ]);
+            $teacher_docx_url = new moodle_url($PAGE->url, [
+                'action'  => 'docx_export_teacher',
+                'id'      => $ctx['id'],
+                'sesskey' => sesskey()
+            ]);
+
+            echo html_writer::link($student_pdf_url, '📥 Descargar PDF (Estudiante)', [
+                'class' => 'areteia-btn external',
+                'style' => 'background:#0073e6; border-color:#0073e6; color:#fff; padding:10px 18px; display:inline-block; text-decoration:none;'
+            ]);
+            echo html_writer::link($teacher_pdf_url, '📋 Descargar PDF (Profesor)', [
+                'class' => 'areteia-btn external',
+                'style' => 'background:#6c757d; border-color:#6c757d; color:#fff; padding:10px 18px; display:inline-block; text-decoration:none;'
+            ]);
+            echo html_writer::link($student_docx_url, '📥 Descargar DOCX (Estudiante)', [
+                'class' => 'areteia-btn external',
+                'style' => 'background:#009933; border-color:#009933; color:#fff; padding:10px 18px; display:inline-block; text-decoration:none;'
+            ]);
+            echo html_writer::link($teacher_docx_url, '📋 Descargar DOCX (Profesor)', [
+                'class' => 'areteia-btn external',
+                'style' => 'background:#555555; border-color:#555555; color:#fff; padding:10px 18px; display:inline-block; text-decoration:none;'
+            ]);
+            echo html_writer::end_tag('div');
+
 
         } else {
             echo html_writer::tag('p', "<strong>Vista previa final: $instrument</strong>", [
@@ -402,14 +352,13 @@ class step7 {
         }
 
         // Navigation
-        $prev_url   = new moodle_url($PAGE->url, ['step' => 6]); // Now goes back to 5 due to sequence update
+        $prev_url   = new moodle_url($PAGE->url, ['step' => 2]); // Go back to step 2 (eval_design)
         $export_url = new moodle_url($PAGE->url, ['action' => 'export', 'sesskey' => sesskey()]);
 
         if ($exported == 1 || $quiz_injected == 1) { // Hide if either is published to avoid confusion
-            step_renderer::render_nav(7, $prev_url, null, '', [], '✔ Publicado con éxito');
+            step_renderer::render_nav(3, $prev_url, null, '', [], '✔ Publicado con éxito');
         } else {
-            // Se pasa null en el tercer parámetro para eliminar el botón duplicado de "Publicar"
-            step_renderer::render_nav(7, $prev_url, null);
+            step_renderer::render_nav(3, $prev_url, null);
         }
 
         // ----------------------------------------------------------------
@@ -428,7 +377,7 @@ class step7 {
             echo html_writer::tag('strong', '🎯 ¡Cuestionario publicado en Moodle!', [
                 'style' => 'color:#28a745; display:block; margin-bottom:5px;',
             ]);
-            echo html_writer::tag('p', '3 preguntas creadas correctamente.', [
+            echo html_writer::tag('p', 'Preguntas creadas correctamente.', [
                 'style' => 'font-size:12px; margin-bottom:10px;',
             ]);
             if ($quiz_cmid) {
@@ -457,4 +406,5 @@ class step7 {
             echo html_writer::end_tag('div');
         }
     }
+
 }

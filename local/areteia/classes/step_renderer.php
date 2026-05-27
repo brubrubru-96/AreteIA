@@ -20,12 +20,12 @@ class step_renderer {
         ],
         'eval' => [
             'label' => 'Crear evaluación',
-            'steps' => [3, 4, 5, 7],
+            'steps' => [0, 1, 2, 3],
             'icon'  => '📝'
         ],
         'crit' => [
             'label' => 'Crear Criterio de Evaluación',
-            'steps' => [6, 7],
+            'steps' => [0, 1],
             'icon'  => '⚖️'
         ]
     ];
@@ -74,16 +74,50 @@ class step_renderer {
             'action'   => $action,
         ];
 
-        // Dispatch to step class
-        $class = "\\local_areteia\\steps\\step{$step}";
-        if (class_exists($class)) {
+        // Dispatch to the refactored, single-purpose step class
+        $class = self::get_step_class($action, $step);
+        if ($class && class_exists($class)) {
             $class::render($ctx);
+        } else {
+            // Fallback to legacy step names
+            $fallback = "\\local_areteia\\steps\\step{$step}";
+            if (class_exists($fallback)) {
+                $fallback::render($ctx);
+            }
         }
 
         echo \html_writer::end_tag('div'); // card
 
         // CSS/JS Handler for AI Prompt Preview
         self::render_ai_preview_handler($id);
+    }
+
+    /**
+     * Map action/step pair to its dedicated class.
+     *
+     * @param string $action
+     * @param int $step
+     * @return string|null Class name with namespace or null
+     */
+    private static function get_step_class(string $action, int $step): ?string {
+        $mapping = [
+            'lib' => [
+                0 => '\\local_areteia\\steps\\lib_welcome',
+                1 => '\\local_areteia\\steps\\lib_build',
+            ],
+            'eval' => [
+                0 => '\\local_areteia\\steps\\eval_pedagogy',
+                1 => '\\local_areteia\\steps\\eval_suggestions',
+                2 => '\\local_areteia\\steps\\eval_design',
+                3 => '\\local_areteia\\steps\\eval_publish',
+            ],
+            'crit' => [
+                0 => '\\local_areteia\\steps\\crit_selection',
+                1 => '\\local_areteia\\steps\\crit_finalize',
+            ],
+        ];
+
+        return $mapping[$action][$step] ?? null;
     }
 
     /**

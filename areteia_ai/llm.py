@@ -176,7 +176,7 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
       - **Opción múltiple**: Llena `consiga` (enunciado), `alternativas` (mínimo 4) y `correct_index` (índice 0-indexed de la opción correcta).
       - **Verdadero/Falso**: Llena `consiga` (afirmación) y `correct_boolean` (true si es verdadera, false si es falsa).
       - **Emparejamiento / Poner en orden**: Describe la tarea en `consiga` y llena la lista `pairs` con objetos `{{"premise": "...", "answer": "..."}}`.
-      - **Respuesta breve / Texto lacunar**: Enuncia la tarea en `consiga` y proporciona la respuesta esperada en `short_answer`.
+      - **Respuesta breve / Texto lacunar**: Genera un párrafo completo con uno o más espacios en blanco (`_____`, `[...]`) en `consiga`; no escribas solo la consigna general. Después, coloca la respuesta esperada o el concepto faltante en `short_answer`.
       - **Numérica**: Enuncia el problema en `consiga` y provee el valor exacto en `numerical_value`.
       - **Ensayo / Respuesta abierta**: Describe las orientaciones en `consiga`. No requiere respuesta predefinida.
 
@@ -329,3 +329,76 @@ def get_correction_prompt(correction_type, correction_label, chosen_instrument, 
 
   ### FORMATO DE RESPUESTA (JSON ÚNICAMENTE):
   {info['schema']}"""
+
+
+def get_adjust_item_prompt(item, instruction, valid_types=None, objective_json=None):
+    import json
+    types_str = ""
+    if valid_types:
+        types_str = "\n"
+        for t in valid_types:
+            types_str += f"        - {t['name']}: {t['definition']}\n\n"
+            
+    current_type = item.get("type", "")
+    current_objectives = item.get("objectives", [])
+
+    # Format all evaluation objectives
+    all_objectives_str = "(No hay objetivos de la evaluación definidos)"
+    if objective_json:
+        try:
+            obj_list = json.loads(objective_json) if isinstance(objective_json, str) else objective_json
+            if obj_list:
+                obj_parts = []
+                for idx, obj in enumerate(obj_list):
+                    ref_key = f"Obj {idx + 1}"
+                    bloom = obj.get("bloom", "GENERAL").upper()
+                    text = obj.get("text", "")
+                    if text:
+                        obj_parts.append(f"        - {ref_key} [{bloom}]: {text}")
+                all_objectives_str = "\n".join(obj_parts)
+        except Exception as e:
+            pass
+
+    return f"""### TAREA A REALIZAR:
+  Ajustar y corregir el siguiente ítem de evaluación basado en la instrucción del docente.
+
+  ### ÍTEM DE EVALUACIÓN ACTUAL (JSON):
+  {json.dumps(item, ensure_ascii=False, indent=2)}
+
+  ### INSTRUCCIÓN DE AJUSTE DEL DOCENTE (Prioridad máxima):
+  {instruction}
+
+  ### LISTA DE OBJETIVOS DE LA EVALUACIÓN ACTUAL (DEFINIDOS EN ETAPAS ANTERIORES):
+{all_objectives_str}
+
+  ### TIPOS DE PREGUNTAS PERMITIDOS (DEBES ELEGIR SOLO DE ESTA LISTA SI SE SOLICITA CAMBIO DE TIPO):
+  {types_str}
+
+  ### REQUISITOS DE CALIDAD Y FORMATO:
+  1. **PRESERVACIÓN DEL TIPO DE PREGUNTA POR DEFECTO**: Debes mantener el tipo de pregunta original del ítem (el tipo actual es: "{current_type}"). **BAJO NINGUNA CIRCUNSTANCIA** cambies el tipo de la pregunta a menos que la "INSTRUCCIÓN DE AJUSTE DEL DOCENTE" te pida de forma explícita y textual cambiarlo (por ejemplo, "convierte esta pregunta en verdadero o falso" o "cámbiala a tipo de opción múltiple").
+  2. **GESTIÓN Y CAMBIO DE OBJETIVOS DE LA EVALUACIÓN**:
+     - **Preservación por defecto**: Si la "INSTRUCCIÓN DE AJUSTE DEL DOCENTE" NO menciona los objetivos ni te pide cambiar el enfoque/objetivo de la pregunta, debes conservar estrictamente el o los objetivos asociados originalmente a este ítem (los objetivos actuales son: {json.dumps(current_objectives)}).
+     - **Cambio de objetivo implícito o explícito**: Si la instrucción te pide usar otro objetivo, cambiarlo, o rehacer la pregunta con otro objetivo de la evaluación (por ejemplo: "utiliza otro de los objetivos de la evaluación", "cambia el objetivo", "evalúa otro objetivo", "asocia esta pregunta al Obj 2"), **DEBES seleccionar activamente uno o más objetivos diferentes** de la "LISTA DE OBJETIVOS DE LA EVALUACIÓN ACTUAL (DEFINIDOS EN ETAPAS ANTERIORES)" que mejor se ajusten y reescribir por completo la pregunta en `"consiga"` para medir de forma rigurosa y alineada ese nuevo objetivo de la evaluación. El campo `"objectives"` en tu JSON de respuesta debe actualizarse con el identificador del nuevo objetivo seleccionado (por ejemplo, `["Obj 2"]`).
+  3. Si la instrucción del docente solicita cambiar el tipo de pregunta, hazlo asegurando que el campo "type" coincida exactamente con uno de los "TIPOS DE PREGUNTAS PERMITIDOS" listados arriba.
+  4. Asegúrate de incluir y corregir todos los campos correspondientes al tipo de pregunta final:
+      - **Opción múltiple**: Llena `consiga` (enunciado), `alternativas` (mínimo 4) y `correct_index` (índice 0-indexed de la opción correcta).
+      - **Verdadero/Falso**: Llena `consiga` (afirmación) y `correct_boolean` (true si es verdadera, false si es falsa).
+      - **Emparejamiento / Poner en orden**: Describe la tarea en `consiga` y llena la lista `pairs` con objetos `{{"premise": "...", "answer": "..."}}`.
+      - **Respuesta breve / Texto lacunar**: Genera un párrafo completo con uno o más espacios en blanco (`_____`, `[...]`) en `consiga`; no escribas solo la consigna general. Después, coloca la respuesta esperada o el concepto faltante en `short_answer`.
+      - **Numérica**: Enuncia el problema en `consiga` y provee el valor exacto en `numerical_value`.
+      - **Ensayo / Respuesta abierta**: Describe las orientaciones en `consiga`. No requiere respuesta predefinida.
+  5. Los ítems deben redactarse con rigor pedagógico. Asigna una dificultad ("Fácil", "Media", "Difícil") y puntos (points).
+  6. Responde UNICAMENTE en formato JSON que represente al ítem ajustado, sin envoltorios de objeto de batería, con la estructura de un único ítem (coincidiendo con el esquema de un único InstrumentItem):
+  {{
+    "type": "Nombre exacto del tipo",
+    "objectives": ["Obj X"],
+    "consiga": "...",
+    "difficulty": "Media",
+    "alternativas": ["op A", "op B", "op C", "op D"],
+    "correct_index": 0,
+    "correct_boolean": null,
+    "pairs": null,
+    "short_answer": null,
+    "numerical_value": null,
+    "points": 1.0
+  }}"""

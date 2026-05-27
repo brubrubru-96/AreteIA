@@ -11,10 +11,10 @@ use local_areteia\rag_client;
 use local_areteia\step_renderer;
 
 /**
- * Step 4 — Sugerencias de la IA.
+ * eval_suggestions — Instrumentos sugeridos por AreteIA (Action: eval, Step: 1).
  * AI proposes pedagogically justified instruments based on the objective.
  */
-class step4 {
+class eval_suggestions {
 
     public static function render(array $ctx): void {
         global $PAGE, $OUTPUT;
@@ -31,6 +31,7 @@ class step4 {
         $d4         = session_manager::get('d4', '');
         $s_sugs_raw = session_manager::get('s_sugs', '');
         $feedback   = session_manager::get('feedback', '');
+        $effective_sel = null;
 
         // Minimal params for links in this step
         $link_params = ['id' => $id];
@@ -44,7 +45,7 @@ class step4 {
         step_renderer::render_rag_info();
 
         // Lock banner: protect downstream generated content
-        $is_locked = lock_manager::is_locked(4);
+        $is_locked = lock_manager::is_locked(1, 'eval');
         if ($is_locked) {
             lock_manager::render_lock_banner(
                 '🔒 Opción bloqueada',
@@ -76,7 +77,7 @@ class step4 {
                 'Hacé clic para que AreteIA analice tu(s) objetivo(s) y te sugiera los instrumentos de evaluación',
                 ['style' => 'color:#777; margin-bottom:20px;']
             );
-            $gen_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 4, 'do_gen' => 1]));
+            $gen_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 1, 'do_gen' => 1]));
             echo html_writer::start_tag('div', ['style' => 'display:flex; justify-content:center; align-items:center; gap:10px;']);
             echo step_renderer::render_preview_button(4);
             echo html_writer::link($gen_url, '✨ Generar sugerencias con AreteIA', [
@@ -113,7 +114,7 @@ class step4 {
                 ]);
                 echo html_writer::start_tag('div', ['style' => 'display:flex; gap:10px; align-items:center;']);
                 echo step_renderer::render_preview_button(4);
-                $adjust_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 4, 'do_gen' => 1, 'sel_sug' => $effective_sel]));
+                $adjust_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 1, 'do_gen' => 1, 'sel_sug' => $effective_sel]));
                 echo html_writer::link($adjust_url, 'Refinar Sugerencias ✨', [
                     'class' => 'areteia-btn areteia-btn-primary',
                     'style' => 'font-size:12px; background:#854f0b; border-color:#854f0b;',
@@ -141,7 +142,7 @@ class step4 {
                     'id' => 'instrument-fallback-select',
                     'class' => 'form-control',
                     'style' => 'flex-grow:1;',
-                    'data-baseurl' => (new moodle_url($PAGE->url, $link_params))->out(false) . "&step=4"
+                    'data-baseurl' => (new moodle_url($PAGE->url, $link_params))->out(false) . "&step=1"
                 ]);
                 echo html_writer::tag('option', 'Selecciona otro instrumento del catálogo...', ['value' => '']);
                 foreach ($instruments_list as $inst) {
@@ -182,11 +183,11 @@ class step4 {
         // Log token usage to console
         if (!empty($usage)) {
             $usage_json = json_encode($usage);
-            echo "<script>console.log('AI Token Usage (Step 4):', {$usage_json});</script>";
+            echo "<script>console.log('AI Token Usage (Step 1 - Suggestions):', {$usage_json});</script>";
         }
 
         // Navigation
-        $prev_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 3]));
+        $prev_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 0]));
 
         // Render generation config BEFORE the navigation block
         if ($effective_sel && ($confirmed || $effective_sel === $instrument)) {
@@ -223,7 +224,7 @@ class step4 {
             if ($confirmed || $effective_sel === $instrument) {
                 // In Gen-Config state, right button is Generate Items
                 $gen_items_url = new moodle_url($PAGE->url, array_merge($link_params, [
-                    'step'       => 5,
+                    'step'       => 2,
                     'do_gen'     => 1,
                     'instrument' => $effective_sel
                 ]));
@@ -247,7 +248,7 @@ class step4 {
                 }
 
                 $confirm_url = new moodle_url($PAGE->url, array_merge($link_params, [
-                    'step'       => 4,
+                    'step'       => 1,
                     'confirmed'  => 1,
                     'instrument' => $effective_sel,
                 ]));
@@ -341,7 +342,7 @@ class step4 {
             $is_sel = 'areteia-btn-primary';
         }
 
-        $sug_url    = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 4, 'sel_sug' => $name]));
+        $sug_url    = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 1, 'sel_sug' => $name]));
         $btn_attrs = [
             'class' => "areteia-btn $is_sel",
             'style' => 'height:100%; display:flex; flex-direction:column; text-align:left; padding:15px; position:relative;',

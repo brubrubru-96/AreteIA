@@ -955,3 +955,18 @@ textarea[name="feedback"]:focus {
     outline: none;
     box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
 }
+
+/* Card view and edit modes */
+.item-card .item-edit-mode {
+    display: none;
+}
+.item-card.editing .item-view-mode {
+    display: none;
+}
+.item-card.editing .item-edit-mode {
+    display: block;
+}
+
+.item-card.editing {
+    border-left-color: #28a745 !important;
+}

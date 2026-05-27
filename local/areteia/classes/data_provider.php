@@ -522,9 +522,19 @@ class data_provider {
             }
         }
 
-        // Recalculate sumgrades (sum of maxmark from quiz_slots)
-        if (function_exists('quiz_update_sumgrades')) {
-            quiz_update_sumgrades($quiz);
+        // Recalculate quiz sumgrades using the latest Moodle API when available.
+        $gradecalculatorfile = $CFG->libdir . '/grade/grade_calculator.php';
+        if (file_exists($gradecalculatorfile)) {
+            require_once($gradecalculatorfile);
+        }
+        if (class_exists('grade_calculator') && method_exists('grade_calculator', 'recompute_quiz_sumgrades')) {
+            grade_calculator::recompute_quiz_sumgrades($quiz);
+        } else {
+            $sumgrades = (float)$DB->get_field_sql('SELECT COALESCE(SUM(maxmark), 0) FROM {quiz_slots} WHERE quizid = ?', [$quiz->id]);
+            $DB->set_field('quiz', 'sumgrades', $sumgrades, ['id' => $quiz->id]);
+            if ($max_grade === null) {
+                $DB->set_field('quiz', 'grade', $sumgrades, ['id' => $quiz->id]);
+            }
         }
 
         // Verify sumgrades was updated; if still 0 with questions, force-fix.
@@ -564,46 +574,69 @@ class data_provider {
     ): int {
         global $DB, $USER;
 
+        $resolvedqtype = $q_data['type'];
+        if ($q_data['type'] === 'multianswer') {
+            $resolvedqtype = self::resolve_cloze_qtype();
+        }
+
         // --- Core question record ---
         $q                         = new \stdClass();
-        $q->name                   = 'Pregunta ' . $slot_num . ': ' . substr($q_data['text'], 0, 50) . '...';
-        $q->questiontext           = $q_data['text'];
-        $q->questiontextformat     = FORMAT_HTML;
+        $q->name                   = self::sanitize_utf8('Pregunta ' . $slot_num . ': ' . substr($q_data['text'], 0, 50) . '...');
+        if ($q_data['type'] === 'multianswer' && !empty($q_data['cloze_answer'])) {
+            $q->questiontext = self::sanitize_utf8(self::build_cloze_text($q_data['text'], $q_data['cloze_answer']));
+            $q->questiontextformat = ($resolvedqtype === 'cloze') ? FORMAT_MOODLE : FORMAT_HTML;
+        } else {
+            $q->questiontext = self::sanitize_utf8($q_data['text']);
+            $q->questiontextformat = FORMAT_HTML;
+        }
         $q->generalfeedback        = '';
         $q->generalfeedbackformat  = FORMAT_HTML;
         $q->defaultmark            = isset($q_data['points']) ? (float)$q_data['points'] : 1.0;
         $q->penalty                = ($q_data['type'] === 'essay') ? 0.0 : 0.3333333;
-        $q->qtype                  = $q_data['type'];
-        $q->length                 = ($q_data['type'] === 'description') ? 0 : 1;
-        $q->stamp                  = make_unique_id_code();
-        $q->category               = $category_id;
-        $q->parent                 = 0;
-        $q->hidden                 = 0;
-        $q->timecreated            = time();
-        $q->timemodified           = time();
-        $q->createdby              = $USER->id;
-        $q->modifiedby             = $USER->id;
-        $q->version                = make_unique_id_code();
-        $q->id = $DB->insert_record('question', $q);
 
-        // --- Moodle 4.x: question_bank_entries + question_versions ---
-        if ($DB->get_manager()->table_exists('question_bank_entries')) {
-            $qbe                       = new \stdClass();
-            $qbe->questioncategoryid   = $category_id;
-            $qbe->idnumber             = null;
-            $qbe->ownerid              = $USER->id;
-            $qbe_id = $DB->insert_record('question_bank_entries', $qbe);
-
-            $qv                       = new \stdClass();
-            $qv->questionbankentryid  = $qbe_id;
-            $qv->version              = 1;
-            $qv->questionid           = $q->id;
-            $qv->status               = 'ready';
-            $DB->insert_record('question_versions', $qv);
+        $resolvedqtype = $q_data['type'];
+        if ($q_data['type'] === 'multianswer') {
+            $resolvedqtype = self::resolve_cloze_qtype();
         }
 
+        $q->qtype                  = $resolvedqtype;
+        $q->length                 = ($resolvedqtype === 'description') ? 0 : 1;
+        $q->stamp                  = make_unique_id_code();
+
+        if ($DB->get_manager()->field_exists('question', 'category')) {
+            $q->category = $category_id;
+        }
+        if ($DB->get_manager()->field_exists('question', 'parent')) {
+            $q->parent = 0;
+        }
+        if ($DB->get_manager()->field_exists('question', 'hidden')) {
+            $q->hidden = 0;
+        }
+        if ($DB->get_manager()->field_exists('question', 'timecreated')) {
+            $q->timecreated = time();
+        }
+        if ($DB->get_manager()->field_exists('question', 'timemodified')) {
+            $q->timemodified = time();
+        }
+        if ($DB->get_manager()->field_exists('question', 'createdby')) {
+            $q->createdby = $USER->id;
+        }
+        if ($DB->get_manager()->field_exists('question', 'modifiedby')) {
+            $q->modifiedby = $USER->id;
+        }
+        if ($DB->get_manager()->field_exists('question', 'version')) {
+            $q->version = make_unique_id_code();
+        }
+
+        $q->id = $DB->insert_record('question', $q);
+        if ($DB->get_manager()->field_exists('question', 'category')) {
+            $DB->set_field('question', 'category', $category_id, ['id' => $q->id]);
+        }
+
+        self::create_question_bank_entries($q->id, $category_id);
+
         // --- Type-specific options ---
-        switch ($q_data['type']) {
+        switch ($resolvedqtype) {
             case 'multichoice':
                 self::create_multichoice_data($q->id, $q_data);
                 break;
@@ -623,7 +656,10 @@ class data_provider {
                 self::create_gapselect_data($q->id, $q_data);
                 break;
             case 'multianswer':
-                // Cloze questions only need the formatted text in questiontext.
+                self::create_multianswer_data($q->id, $category_id);
+                break;
+            case 'cloze':
+                self::create_cloze_data($q->id, $category_id);
                 break;
             case 'essay':
                 self::create_essay_data($q->id);
@@ -631,6 +667,230 @@ class data_provider {
         }
 
         return $q->id;
+    }
+
+    private static function build_cloze_text(string $text, string $answer): string {
+        $question = trim($text);
+        $answer = trim($answer);
+
+        if ($question === '' || $answer === '') {
+            return $question;
+        }
+
+        if (preg_match('/\{\s*\d+\s*:\s*SHORTANSWER\s*:/i', $question)) {
+            return $question;
+        }
+
+        $answers = array_values(array_filter(array_map('trim', preg_split('/\s*,\s*/u', $answer))));
+        if (empty($answers)) {
+            return $question;
+        }
+
+        $escape_answer = function(string $value): string {
+            return str_replace([
+                '\\',
+                '#',
+                '~',
+                '=',
+                '{',
+                '}',
+            ], [
+                '\\\\',
+                '\\#',
+                '\\~',
+                '\\=',
+                '\\{',
+                '\\}',
+            ], $value);
+        };
+
+        $build_answer_value = function(string $answerText) use ($escape_answer): string {
+            $answerVariants = [];
+            $escapedText = $escape_answer($answerText);
+            $answerVariants[] = '%100%' . $escapedText;
+
+            if (preg_match('/\p{L}/u', $answerText)) {
+                $unaccented = self::remove_accents($answerText);
+                if ($unaccented !== $answerText) {
+                    $answerVariants[] = '%100%' . $escape_answer($unaccented);
+                }
+            }
+
+            return implode('~', array_unique($answerVariants));
+        };
+
+        $placeholder = function(int $index) use ($answers, $build_answer_value): string {
+            $answerText = $answers[min($index, count($answers) - 1)];
+            $answerValue = $build_answer_value($answerText);
+            $type = preg_match('/\p{L}/u', $answerText) ? 'SHORTANSWER_C' : 'SHORTANSWER';
+            return '{' . ($index + 1) . ':' . $type . ':' . $answerValue . '}';
+        };
+
+        $index = 0;
+        $replaced = preg_replace_callback('/_{3,}|\[\s*(?:_+|\.{3,})\s*\]/u', function($matches) use (&$index, $placeholder) {
+            return $placeholder($index++);
+        }, $question);
+
+        if ($replaced !== null && $replaced !== $question) {
+            return $replaced;
+        }
+
+        // Replace explicit answer occurrences one by one.
+        foreach ($answers as $i => $part) {
+            if ($part === '') {
+                continue;
+            }
+            $pattern = '/\b' . preg_quote($part, '/') . '\b/iu';
+            if (preg_match($pattern, $question)) {
+                $question = preg_replace($pattern, $placeholder($i), $question, 1);
+            }
+        }
+
+        if ($question !== trim($text)) {
+            return $question;
+        }
+
+        return $question . ' ' . $placeholder(0);
+    }
+
+    private static function remove_accents(string $text): string {
+        if (function_exists('transliterator_transliterate')) {
+            $transliterated = transliterator_transliterate('Any-Latin; Latin-ASCII; [\u0080-\u7fff] remove', $text);
+            if ($transliterated !== false) {
+                return $transliterated;
+            }
+        }
+
+        $map = [
+            'á' => 'a', 'Á' => 'A',
+            'é' => 'e', 'É' => 'E',
+            'í' => 'i', 'Í' => 'I',
+            'ó' => 'o', 'Ó' => 'O',
+            'ú' => 'u', 'Ú' => 'U',
+            'ü' => 'u', 'Ü' => 'U',
+            'ñ' => 'n', 'Ñ' => 'N',
+        ];
+
+        return strtr($text, $map);
+    }
+
+    private static function resolve_cloze_qtype(): string {
+        global $DB;
+        $manager = $DB->get_manager();
+
+        if ($manager->table_exists('qtype_multianswer_options')) {
+            return 'multianswer';
+        }
+        if ($manager->table_exists('qtype_cloze_options')) {
+            return 'cloze';
+        }
+
+        return 'multianswer';
+    }
+
+    private static function create_multianswer_data(int $qid, int $category_id): void {
+        global $DB, $CFG;
+        require_once($CFG->libdir . '/questionlib.php');
+
+        $question = $DB->get_record('question', ['id' => $qid], '*', MUST_EXIST);
+        $question->category = $category_id;
+        $question->options = new \stdClass();
+        $question->options->questions = [];
+
+        $category = $DB->get_record('question_categories', ['id' => $category_id], '*', MUST_EXIST);
+        $question->context = \context::instance_by_id($category->contextid);
+
+        $qtype = \question_bank::get_qtype('multianswer');
+        $qtype->save_question_options($question);
+    }
+
+    private static function create_cloze_data(int $qid, int $category_id): void {
+        global $DB, $CFG;
+        require_once($CFG->libdir . '/questionlib.php');
+
+        $question = $DB->get_record('question', ['id' => $qid], '*', MUST_EXIST);
+        $question->category = $category_id;
+        $question->options = new \stdClass();
+        $question->options->questions = [];
+
+        $category = $DB->get_record('question_categories', ['id' => $category_id], '*', MUST_EXIST);
+        $question->context = \context::instance_by_id($category->contextid);
+
+        $qtype = \question_bank::get_qtype('cloze');
+        $qtype->save_question_options($question);
+    }
+
+    private static function create_question_bank_entries(int $questionid, int $category_id): void {
+        global $DB, $USER;
+
+        if (!$DB->get_manager()->table_exists('question_bank_entries')) {
+            return;
+        }
+
+        $qbe = new \stdClass();
+        $qbe->questioncategoryid = $category_id;
+        $qbe->idnumber = null;
+        $qbe->ownerid = $USER->id;
+
+        $qbecolumns = $DB->get_columns('question_bank_entries');
+        if (isset($qbecolumns['createdby'])) {
+            $qbe->createdby = $USER->id;
+        }
+        if (isset($qbecolumns['modifiedby'])) {
+            $qbe->modifiedby = $USER->id;
+        }
+        if (isset($qbecolumns['timecreated'])) {
+            $qbe->timecreated = time();
+        }
+        if (isset($qbecolumns['timemodified'])) {
+            $qbe->timemodified = time();
+        }
+
+        $qbe_id = $DB->insert_record('question_bank_entries', $qbe);
+        if (!$qbe_id) {
+            return;
+        }
+
+        if (!$DB->get_manager()->table_exists('question_versions')) {
+            return;
+        }
+
+        $qv = new \stdClass();
+        $qv->questionbankentryid = $qbe_id;
+        $qv->version = 1;
+        $qv->questionid = $questionid;
+        $qv->status = 'ready';
+
+        $qvcolumns = $DB->get_columns('question_versions');
+        if (isset($qvcolumns['timecreated'])) {
+            $qv->timecreated = time();
+        }
+        if (isset($qvcolumns['timemodified'])) {
+            $qv->timemodified = time();
+        }
+        if (isset($qvcolumns['userid'])) {
+            $qv->userid = $USER->id;
+        }
+
+        $DB->insert_record('question_versions', $qv);
+    }
+
+    private static function sanitize_utf8(string $value): string {
+        if ($value === '') {
+            return '';
+        }
+
+        if (mb_check_encoding($value, 'UTF-8')) {
+            return $value;
+        }
+
+        $converted = @mb_convert_encoding($value, 'UTF-8', 'ISO-8859-1');
+        if ($converted !== false && mb_check_encoding($converted, 'UTF-8')) {
+            return $converted;
+        }
+
+        $fixed = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+        return $fixed !== false ? $fixed : '';
     }
 
     /** Create answers + options for a multichoice question. */

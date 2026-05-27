@@ -11,10 +11,10 @@ use local_areteia\rag_client;
 use local_areteia\step_renderer;
 
 /**
- * Step 1 — Contexto objetivo.
+ * lib_build — Contexto pedagógico / Crear Biblioteca (Action: lib, Step: 1).
  * Shows imported course data and manages RAG embedding build.
  */
-class step1 {
+class lib_build {
 
     public static function render(array $ctx): void {
         global $PAGE, $OUTPUT;
@@ -24,7 +24,6 @@ class step1 {
         $files     = $ctx['files'];
         $use_moodle = session_manager::get('use_moodle', 1);
 
-        
         echo html_writer::tag('p', 'Contexto pedagógico de la asignatura', ['class' => 'areteia-stitle']);
         echo html_writer::tag('p',
             'Verificá y escogé los recursos importados de Moodle para asegurar que tu biblioteca contenga todo lo que necesitás',
@@ -95,40 +94,39 @@ class step1 {
         echo html_writer::end_tag('div');
 
         // --- Field: Recursos ---
-        // --- Field: Recursos ---
-if (!$already_ingested) {
-    echo html_writer::start_tag('div', ['class' => 'areteia-fr']);
-    echo html_writer::start_tag('div', ['class' => 'areteia-flbl']);
-    echo 'Recursos detectados';
-    echo html_writer::end_tag('div');
+        if (!$already_ingested) {
+            echo html_writer::start_tag('div', ['class' => 'areteia-fr']);
+            echo html_writer::start_tag('div', ['class' => 'areteia-flbl']);
+            echo 'Recursos detectados';
+            echo html_writer::end_tag('div');
 
-    echo html_writer::start_tag('div', ['class' => 'areteia-fb fw']);
+            echo html_writer::start_tag('div', ['class' => 'areteia-fb fw']);
 
-    if ($service_down) {
-        echo html_writer::tag('div',
-            'El servicio de IA aún no ha arrancado (posible reinicio de PC). Reintentando...',
-            ['class' => 'areteia-fb fw', 'style' => 'color:#ff9800;']
-        );
-    } else {
-        $tree = \local_areteia\data_provider::get_course_materials_tree($id);
-        echo html_writer::start_tag('div', [
-            'class' => 'areteia-fb fw',
-            'style' => 'margin-bottom:15px; display: flex; justify-content: space-between; align-items: center;'
-        ]);
-        echo html_writer::tag('span', 'Seleccioná los recursos para AreteIA:', ['style' => 'font-weight:bold;']);
-        echo html_writer::tag('span', 'Calculando...', [
-            'id' => 'selection-count-badge',
-            'class' => 'sb-tag sb-warn',
-            'style' => 'margin-left:10px; padding: 4px 10px; border-radius: 12px; font-size: 11px;'
-        ]);
-        echo html_writer::end_tag('div');
+            if ($service_down) {
+                echo html_writer::tag('div',
+                    'El servicio de IA aún no ha arrancado (posible reinicio de PC). Reintentando...',
+                    ['class' => 'areteia-fb fw', 'style' => 'color:#ff9800;']
+                );
+            } else {
+                $tree = \local_areteia\data_provider::get_course_materials_tree($id);
+                echo html_writer::start_tag('div', [
+                    'class' => 'areteia-fb fw',
+                    'style' => 'margin-bottom:15px; display: flex; justify-content: space-between; align-items: center;'
+                ]);
+                echo html_writer::tag('span', 'Seleccioná los recursos para AreteIA:', ['style' => 'font-weight:bold;']);
+                echo html_writer::tag('span', 'Calculando...', [
+                    'id' => 'selection-count-badge',
+                    'class' => 'sb-tag sb-warn',
+                    'style' => 'margin-left:10px; padding: 4px 10px; border-radius: 12px; font-size: 11px;'
+                ]);
+                echo html_writer::end_tag('div');
 
-        self::render_materials_tree($tree, $prev_selected);
-    }
+                self::render_materials_tree($tree, $prev_selected);
+            }
 
-    echo html_writer::end_tag('div'); // areteia-fb
-    echo html_writer::end_tag('div'); // areteia-fr
-}
+            echo html_writer::end_tag('div'); // areteia-fb
+            echo html_writer::end_tag('div'); // areteia-fr
+        }
     }
 
     /**
@@ -311,7 +309,6 @@ if (!$already_ingested) {
             // Initialize the poller
             echo html_writer::tag('script', "document.addEventListener('DOMContentLoaded', () => { initIngestionPoller($id); });");
 
-            
             echo html_writer::start_tag('div', ['class' => 'areteia-nav']);
             echo html_writer::link($prev_url, '← Volver', ['class' => 'areteia-btn']);
 

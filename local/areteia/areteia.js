@@ -20,8 +20,9 @@ document.addEventListener("click", e => {
     
     if (!link || link.classList.contains("external")) return;
 
-    // Skip the ingest and publish buttons — handled natively for security (sesskey)
+    // Skip the ingest, publish, and inline item action buttons — handled separately
     if (link.id === 'confirm-ingest-btn' || link.id === 'btn-publish-quiz') return;
+    if (link.classList.contains('item-adjust-submit-btn') || link.classList.contains('item-save-btn') || link.classList.contains('item-cancel-btn') || link.classList.contains('item-edit-btn')) return;
 
     // Handle confirmation if needed
     if (link.dataset.confirm && !confirm(link.dataset.confirm)) {
@@ -168,6 +169,7 @@ document.addEventListener("click", e => {
         initItemAdjustmentUI();
         initInstrumentFallback();
         initQuizWeightsAdjustment();
+        initItemDirectEditUI();
     }).catch(err => {
         console.error(err);
         alert("Error en la comunicación con el servidor. Por favor, reintenta.");
@@ -397,7 +399,7 @@ function initStep3Reactivity() {
  * Shows a spinner and "Generando con IA..." label on click.
  */
 function initGenerativeLoading() {
-    document.querySelectorAll('.areteia-btn-primary:not(.external):not(#confirm-ingest-btn)').forEach(btn => {
+    document.querySelectorAll('.areteia-btn-primary:not(.external):not(#confirm-ingest-btn):not(.item-save-btn):not(.item-cancel-btn):not(.item-edit-btn):not(.item-adjust-submit-btn)').forEach(btn => {
         if (btn.dataset.bound) return;
         btn.dataset.bound = "1";
         btn.addEventListener('click', function (e) {
@@ -493,23 +495,238 @@ document.addEventListener("DOMContentLoaded", () => {
     initItemAdjustmentUI();
     initInstrumentFallback();
     initQuizWeightsAdjustment();
+    initItemDirectEditUI();
 });
 
 /**
- * Step 5: Item Adjustment UI Toggling
+ * Step 5: Item Adjustment UI Toggling + AJAX AI Adjustment
  */
 function initItemAdjustmentUI() {
     document.addEventListener("click", e => {
+        // Toggle tray open/close
         const trigger = e.target.closest(".item-adjust-trigger");
-        if (!trigger) return;
+        if (trigger) {
+            const index = trigger.dataset.index;
+            const tray = document.querySelector(`.item-adjust-tray[data-index="${index}"]`);
+            if (tray) {
+                tray.classList.toggle("active");
+                trigger.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "Ajustar con IA ✨";
+            }
+            return;
+        }
 
-        const index = trigger.dataset.index;
-        const tray = document.querySelector(`.item-adjust-tray[data-index="${index}"]`);
-        if (tray) {
-            tray.classList.toggle("active");
-            trigger.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "Ajustar con IA ✨";
+        // Submit adjustment to AI
+        const submitBtn = e.target.closest(".item-adjust-submit-btn");
+        if (submitBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const index = parseInt(submitBtn.dataset.index);
+            adjustItemWithAI(index, submitBtn);
+            return;
         }
     });
+}
+
+/**
+ * Send a single item to the AI for adjustment via AJAX.
+ */
+function adjustItemWithAI(index, submitBtn) {
+    const payloadInput = document.querySelector('input[name="src_data_payload"]');
+    if (!payloadInput) return;
+
+    const tray = document.querySelector(`.item-adjust-tray[data-index="${index}"]`);
+    const textarea = tray ? tray.querySelector('.item-adjust-textarea') : null;
+    const statusSpan = tray ? tray.querySelector('.item-adjust-status') : null;
+    const instruction = textarea ? textarea.value.trim() : '';
+
+    if (!instruction) {
+        if (textarea) textarea.focus();
+        if (statusSpan) statusSpan.textContent = '⚠️ Escribe una instrucción primero.';
+        return;
+    }
+
+    let data;
+    try {
+        data = JSON.parse(payloadInput.value);
+    } catch (err) {
+        console.error("Error parsing payload:", err);
+        return;
+    }
+
+    const item = data.items[index];
+    if (!item) return;
+
+    // Show loading state
+    const originalLabel = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span> Generando...';
+    submitBtn.disabled = true;
+    submitBtn.classList.add("is-loading");
+    if (statusSpan) statusSpan.textContent = '';
+    if (textarea) textarea.disabled = true;
+
+    // Build URL for the AJAX call
+    const url = new URL(window.location.href);
+    url.searchParams.set("action", "adjust_item");
+    url.searchParams.set("ajax", "1");
+
+    // Send as POST with form data
+    const formData = new FormData();
+    formData.append("item_json", JSON.stringify(item));
+    formData.append("instruction", instruction);
+    formData.append("item_index", index);
+
+    fetch(url.toString(), {
+        method: "POST",
+        body: formData
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.status === "success" && res.item) {
+            const adjustedItem = res.item;
+
+            // Preserve the original type if the AI didn't return one
+            if (!adjustedItem.type && item.type) {
+                adjustedItem.type = item.type;
+            }
+
+            // Update item in data
+            data.items[index] = adjustedItem;
+            payloadInput.value = JSON.stringify(data);
+
+            // Refresh the entire card view
+            refreshCardView(index, adjustedItem);
+
+            // Also update the edit form values
+            const card = document.querySelectorAll('.item-card')[index];
+            if (card) {
+                resetEditFormValues(card, adjustedItem, index);
+            }
+
+            if (statusSpan) {
+                statusSpan.innerHTML = '✅ <span style="color:#1e8e3e;">Ítem ajustado correctamente.</span>';
+            }
+            if (textarea) textarea.value = '';
+
+            // Log usage if available
+            if (res.usage) {
+                console.log('AI Token Usage (Adjust Item):', res.usage);
+            }
+        } else {
+            const errMsg = res.message || 'Error desconocido';
+            if (statusSpan) {
+                statusSpan.innerHTML = `❌ <span style="color:#d93025;">${escapeHtml(errMsg)}</span>`;
+            }
+        }
+    })
+    .catch(err => {
+        console.error("Adjust item fetch error:", err);
+        if (statusSpan) {
+            statusSpan.innerHTML = '❌ <span style="color:#d93025;">Error de conexión con el servidor.</span>';
+        }
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalLabel;
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("is-loading");
+        if (textarea) textarea.disabled = false;
+    });
+}
+
+/**
+ * Refresh a card's view mode with new item data.
+ */
+function refreshCardView(index, item) {
+    const type = (item.type || "").toLowerCase();
+
+    // Update body text
+    const bodyTextDiv = document.getElementById(`body-text-${index}`);
+    if (bodyTextDiv) {
+        const newConsigna = item.consigna || item.consiga || item.text || "";
+        if (type.includes("lacunar") || type.includes("cloze") || type === 'multianswer') {
+            bodyTextDiv.innerHTML = renderLacunarPreviewClientSide(newConsigna, item.short_answer || item.cloze_answer || "");
+        } else {
+            bodyTextDiv.innerText = newConsigna;
+        }
+    }
+
+    // Update badges
+    const typeBadge = document.getElementById(`badge-type-${index}`);
+    const diffBadge = document.getElementById(`badge-diff-${index}`);
+    const ptsBadge = document.getElementById(`badge-pts-${index}`);
+    if (typeBadge) typeBadge.innerText = item.type || `Ítem ${index + 1}`;
+    if (diffBadge) diffBadge.innerText = item.difficulty || "Media";
+    if (ptsBadge && item.points) ptsBadge.innerText = `${item.points} pts`;
+
+    // Update objectives
+    const objectivesDiv = document.getElementById(`item-objectives-${index}`);
+    if (objectivesDiv) {
+        const itemObjs = item.objectives || [];
+        if (itemObjs.length > 0 && window.areteiaObjectivesMap) {
+            const formatted = itemObjs.map(objKey => {
+                const mapped = window.areteiaObjectivesMap[objKey];
+                if (mapped) {
+                    const bloom = mapped.bloom;
+                    const text = mapped.text;
+                    return bloom ? `<li><b>${escapeHtml(bloom)}</b> ${escapeHtml(text)}` : escapeHtml(text);
+                }
+                return escapeHtml(objKey);
+            });
+            objectivesDiv.innerHTML = `🎯 <strong>Objetivos:</strong><ul> ${formatted.join('; ')}</ul>`;
+        } else {
+            objectivesDiv.innerHTML = '';
+        }
+    }
+
+    // Update rich content
+    const richContentDiv = document.getElementById(`rich-content-${index}`);
+    if (richContentDiv) {
+        if (type.includes("múltiple") || type.includes("selección") || type.includes("cerrada")) {
+            let html = "";
+            const correctIdx = item.correct_index !== undefined ? parseInt(item.correct_index) : -1;
+            (item.alternativas || []).forEach((opt, optIdx) => {
+                const isCorrect = (optIdx === correctIdx);
+                const optStyle = isCorrect ? 'background:#e6f4ea; border-color:#1e8e3e;' : '';
+                const icon = isCorrect
+                    ? '<i style="font-style:normal; color:#1e8e3e; font-weight:bold;">✔</i>'
+                    : '<i style="font-style:normal; opacity:0.5;">○</i>';
+                html += `<div class="item-option" style="${optStyle}">${icon} ${escapeHtml(opt)}</div>`;
+            });
+            richContentDiv.innerHTML = html;
+        } else if (type.includes("verdadero")) {
+            richContentDiv.innerHTML = `
+                <div style="display:flex; gap:10px;">
+                    <span class="item-vf-badge item-vf-v">Verdadero</span>
+                    <span class="item-vf-badge item-vf-f">Falso</span>
+                </div>`;
+        } else if (type.includes("match") || type.includes("emparejamiento") || type.includes("orden")) {
+            let html = `<table class="areteia-match-preview-table" style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead><tr><th style="padding:8px; border:1px solid #ddd; background:#f5f7fb; text-align:left;">Premisa</th><th style="padding:8px; border:1px solid #ddd; background:#f5f7fb; text-align:left;">Respuesta</th></tr></thead><tbody>`;
+            (item.pairs || []).forEach((pair, pairIdx) => {
+                html += `<tr>
+                    <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">${pairIdx + 1}. ${escapeHtml(pair.premise || pair.premisa || "")}</td>
+                    <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">${String.fromCharCode(65 + pairIdx)}. ${escapeHtml(pair.answer || pair.respuesta || "")}</td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+            richContentDiv.innerHTML = html;
+        } else if (type.includes("lacunar") || type.includes("cloze") || type === 'multianswer') {
+            const realAnswer = item.short_answer || item.cloze_answer || "";
+            const qText = item.consigna || item.consiga || item.text || "";
+            if (shouldShowLacunarAnswerClientSide(realAnswer, qText)) {
+                richContentDiv.innerHTML = `<div class="cloze-answer-preview-label" style="font-size:12px; color:#666; margin-top:8px;">Respuesta esperada: ${escapeHtml(realAnswer)}</div>`;
+            } else {
+                richContentDiv.innerHTML = "";
+            }
+        } else if (type.includes("breve") || type.includes("clásica") || type === "shortanswer") {
+            let html = "";
+            if (item.short_answer) {
+                html += `<div class="shortanswer-answer-preview-label" style="font-size:12px; color:#1e8e3e; margin-top:8px; background:#e6f4ea; padding:8px 12px; border-radius:6px;">✅ Respuesta esperada: ${escapeHtml(item.short_answer)}</div>`;
+            }
+            richContentDiv.innerHTML = html;
+        } else if (type.includes("abierta") || type.includes("ensayo")) {
+            richContentDiv.innerHTML = '<div style="border:1px dashed #ccc; padding:15px; border-radius:8px; color:#999; font-style:italic; font-size:12px;">El estudiante redactará su respuesta aquí...</div>';
+        }
+    }
 }
 
 /**
@@ -969,3 +1186,283 @@ function initQuizWeightsAdjustment() {
         maxGradeInput.addEventListener('input', updateQuizItemAbsPoints);
     }
 }
+
+/**
+ * Step 5: Direct Question Editing UI
+ */
+function initItemDirectEditUI() {
+    if (!document.datasetItemEditBound) {
+        document.datasetItemEditBound = true;
+        
+        document.addEventListener("click", e => {
+            const editBtn = e.target.closest(".item-edit-btn");
+            if (editBtn) {
+                const card = editBtn.closest(".item-card");
+                if (card) {
+                    card.classList.add("editing");
+                }
+                return;
+            }
+
+            const cancelBtn = e.target.closest(".item-cancel-btn");
+            if (cancelBtn) {
+                const card = cancelBtn.closest(".item-card");
+                if (card) {
+                    card.classList.remove("editing");
+                    
+                    const index = parseInt(cancelBtn.dataset.index);
+                    const payloadInput = document.querySelector('input[name="src_data_payload"]');
+                    if (payloadInput) {
+                        try {
+                            const data = JSON.parse(payloadInput.value);
+                            const item = data.items[index];
+                            if (item) {
+                                resetEditFormValues(card, item, index);
+                            }
+                        } catch (err) {
+                            console.error("Error parsing payload on cancel reset:", err);
+                        }
+                    }
+                }
+                return;
+            }
+
+            const saveBtn = e.target.closest(".item-save-btn");
+            if (saveBtn) {
+                const card = saveBtn.closest(".item-card");
+                const index = parseInt(saveBtn.dataset.index);
+                if (card && !isNaN(index)) {
+                    saveItemEdits(card, index);
+                }
+                return;
+            }
+        });
+    }
+}
+
+function resetEditFormValues(card, item, index) {
+    const consignaTextarea = card.querySelector(".edit-item-consigna");
+    const diffSelect = card.querySelector(".edit-item-difficulty");
+    const ptsInput = card.querySelector(".edit-item-points");
+
+    if (consignaTextarea) consignaTextarea.value = item.consigna || item.consiga || item.text || "";
+    if (diffSelect) diffSelect.value = item.difficulty || "Media";
+    if (ptsInput) ptsInput.value = item.points || 1.0;
+
+    const type = (item.type || "").toLowerCase();
+
+    if (type.includes("múltiple") || type.includes("selección") || type.includes("cerrada")) {
+        const altInputs = card.querySelectorAll(".edit-item-alternativa");
+        const altRadios = card.querySelectorAll(`input[name="edit_correct_index_${index}"]`);
+        const alternativas = item.alternativas || [];
+        const correctIdx = item.correct_index !== undefined ? parseInt(item.correct_index) : 0;
+
+        altInputs.forEach((input, i) => {
+            if (alternativas[i] !== undefined) input.value = alternativas[i];
+        });
+        altRadios.forEach((radio, i) => {
+            radio.checked = (i === correctIdx);
+        });
+    } else if (type.includes("verdadero")) {
+        const trueRadio = card.querySelector(`input[name="edit_correct_bool_${index}"][value="true"]`);
+        const falseRadio = card.querySelector(`input[name="edit_correct_bool_${index}"][value="false"]`);
+        const correctBool = item.correct_boolean !== undefined ? !!item.correct_boolean : true;
+
+        if (trueRadio) trueRadio.checked = correctBool;
+        if (falseRadio) falseRadio.checked = !correctBool;
+    } else if (type.includes("match") || type.includes("emparejamiento") || type.includes("orden")) {
+        const premiseInputs = card.querySelectorAll(".edit-item-pair-premise");
+        const answerInputs = card.querySelectorAll(".edit-item-pair-answer");
+        const pairs = item.pairs || [];
+
+        premiseInputs.forEach((input, i) => {
+            if (pairs[i]) input.value = pairs[i].premise || pairs[i].premisa || "";
+        });
+        answerInputs.forEach((input, i) => {
+            if (pairs[i]) input.value = pairs[i].answer || pairs[i].respuesta || "";
+        });
+    } else {
+        const answerInput = card.querySelector(".edit-item-correct-answer");
+        if (answerInput) {
+            answerInput.value = item.short_answer || item.cloze_answer || item.numerical_value || "";
+        }
+    }
+}
+
+function saveItemEdits(card, index) {
+    const payloadInput = document.querySelector('input[name="src_data_payload"]');
+    if (!payloadInput) return;
+
+    try {
+        const data = JSON.parse(payloadInput.value);
+        const item = data.items[index];
+        if (!item) return;
+
+        const consignaTextarea = card.querySelector(".edit-item-consigna");
+        const diffSelect = card.querySelector(".edit-item-difficulty");
+        const ptsInput = card.querySelector(".edit-item-points");
+
+        const newConsigna = consignaTextarea ? consignaTextarea.value.trim() : "";
+        const newDifficulty = diffSelect ? diffSelect.value : "Media";
+        const newPoints = ptsInput ? parseFloat(ptsInput.value) || 1.0 : 1.0;
+
+        if (item.consigna !== undefined) item.consigna = newConsigna;
+        if (item.consiga !== undefined) item.consiga = newConsigna;
+        if (item.text !== undefined) item.text = newConsigna;
+        
+        item.difficulty = newDifficulty;
+        item.points = newPoints;
+
+        const type = (item.type || "").toLowerCase();
+
+        if (type.includes("múltiple") || type.includes("selección") || type.includes("cerrada")) {
+            const altInputs = Array.from(card.querySelectorAll(".edit-item-alternativa"));
+            const correctRadio = card.querySelector(`input[name="edit_correct_index_${index}"]:checked`);
+            
+            item.alternativas = altInputs.map(input => input.value.trim());
+            item.correct_index = correctRadio ? parseInt(correctRadio.value) : 0;
+        } else if (type.includes("verdadero")) {
+            const correctRadio = card.querySelector(`input[name="edit_correct_bool_${index}"]:checked`);
+            item.correct_boolean = correctRadio ? (correctRadio.value === "true") : true;
+        } else if (type.includes("match") || type.includes("emparejamiento") || type.includes("orden")) {
+            const premiseInputs = Array.from(card.querySelectorAll(".edit-item-pair-premise"));
+            const answerInputs = Array.from(card.querySelectorAll(".edit-item-pair-answer"));
+            
+            item.pairs = premiseInputs.map((input, i) => {
+                return {
+                    premise: input.value.trim(),
+                    premisa: input.value.trim(),
+                    answer: answerInputs[i] ? answerInputs[i].value.trim() : "",
+                    respuesta: answerInputs[i] ? answerInputs[i].value.trim() : ""
+                };
+            });
+        } else {
+            const answerInput = card.querySelector(".edit-item-correct-answer");
+            if (answerInput) {
+                const val = answerInput.value.trim();
+                if (item.short_answer !== undefined) item.short_answer = val;
+                if (item.cloze_answer !== undefined) item.cloze_answer = val;
+                if (item.numerical_value !== undefined) item.numerical_value = parseFloat(val) || 0.0;
+            }
+        }
+
+        payloadInput.value = JSON.stringify(data);
+
+        const bodyTextDiv = document.getElementById(`body-text-${index}`);
+        if (bodyTextDiv) {
+            if (type.includes("lacunar") || type.includes("cloze") || type === 'multianswer') {
+                bodyTextDiv.innerHTML = renderLacunarPreviewClientSide(newConsigna, item.short_answer || item.cloze_answer || "");
+            } else {
+                bodyTextDiv.innerText = newConsigna;
+            }
+        }
+
+        const diffBadge = document.getElementById(`badge-diff-${index}`);
+        const ptsBadge = document.getElementById(`badge-pts-${index}`);
+        if (diffBadge) diffBadge.innerText = newDifficulty;
+        if (ptsBadge) ptsBadge.innerText = `${newPoints} pts`;
+
+        const richContentDiv = document.getElementById(`rich-content-${index}`);
+        if (richContentDiv) {
+            if (type.includes("múltiple") || type.includes("selección") || type.includes("cerrada")) {
+                let html = "";
+                const correctIdx = item.correct_index !== undefined ? parseInt(item.correct_index) : -1;
+                item.alternativas.forEach((opt, optIdx) => {
+                    const isCorrect = (optIdx === correctIdx);
+                    const optStyle = isCorrect ? 'background:#e6f4ea; border-color:#1e8e3e;' : '';
+                    const icon = isCorrect
+                        ? '<i style="font-style:normal; color:#1e8e3e; font-weight:bold;">✔</i>'
+                        : '<i style="font-style:normal; opacity:0.5;">○</i>';
+                    html += `
+                        <div class="item-option" style="${optStyle}">
+                            ${icon}
+                            ${escapeHtml(opt)}
+                        </div>
+                    `;
+                });
+                richContentDiv.innerHTML = html;
+            } else if (type.includes("match") || type.includes("emparejamiento") || type.includes("orden")) {
+                let html = `
+                    <table class="areteia-match-preview-table" style="width:100%; border-collapse:collapse; margin-top:10px;">
+                        <thead>
+                            <tr>
+                                <th style="padding:8px; border:1px solid #ddd; background:#f5f7fb; text-align:left;">Premisa</th>
+                                <th style="padding:8px; border:1px solid #ddd; background:#f5f7fb; text-align:left;">Respuesta</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                item.pairs.forEach((pair, pairIdx) => {
+                    html += `
+                        <tr>
+                            <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">${pairIdx + 1}. ${escapeHtml(pair.premise)}</td>
+                            <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">${String.fromCharCode(65 + pairIdx)}. ${escapeHtml(pair.answer)}</td>
+                        </tr>
+                    `;
+                });
+                html += `
+                        </tbody>
+                    </table>
+                `;
+                richContentDiv.innerHTML = html;
+            } else if (type.includes("lacunar") || type.includes("cloze") || type === 'multianswer') {
+                const realAnswer = item.short_answer || item.cloze_answer || "";
+                if (shouldShowLacunarAnswerClientSide(realAnswer, newConsigna)) {
+                    richContentDiv.innerHTML = `<div class="cloze-answer-preview-label" style="font-size:12px; color:#666; margin-top:8px;">Respuesta esperada: ${escapeHtml(realAnswer)}</div>`;
+                } else {
+                    richContentDiv.innerHTML = "";
+                }
+            } else if (type.includes("breve") || type.includes("clásica") || type === "shortanswer") {
+                let html = "";
+                if (item.short_answer) {
+                    html += `<div class="shortanswer-answer-preview-label" style="font-size:12px; color:#1e8e3e; margin-top:8px; background:#e6f4ea; padding:8px 12px; border-radius:6px;">✅ Respuesta esperada: ${escapeHtml(item.short_answer)}</div>`;
+                }
+                richContentDiv.innerHTML = html;
+            }
+        }
+
+        card.classList.remove("editing");
+
+    } catch (err) {
+        console.error("Error saving item edits:", err);
+        alert("Ocurrió un error al guardar la edición.");
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return "";
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function renderLacunarPreviewClientSide(text, answer) {
+    const question = (text || "").trim();
+    if (question === "") {
+        return "<em>Texto lacunar sin consignas.</em>";
+    }
+
+    const blank = '<span style="display:inline-block; min-width:140px; border-bottom:1px solid #999; padding:0 4px; margin:0 2px; line-height:1.4;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>';
+    let escaped = escapeHtml(question);
+
+    if (/_{3,}/u.test(question)) {
+        return escaped.replace(/_{3,}/gu, blank);
+    }
+    if (/\[\s*(?:_+|\.{3,})\s*\]/u.test(question)) {
+        return escaped.replace(/\[\s*(?:_+|\.{3,})\s*\]/gu, blank);
+    }
+    if (answer && question.toLowerCase().includes(answer.toLowerCase())) {
+        const escapedAnswer = answer.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const pattern = new RegExp("(" + escapedAnswer + ")", "iu");
+        return escaped.replace(pattern, blank);
+    }
+    return escaped + " " + blank;
+}
+
+function shouldShowLacunarAnswerClientSide(answer, question) {
+    const ans = (answer || "").trim();
+    const q = (question || "").trim();
+    if (ans === "" || ans === q) return false;
+    if (ans.length > q.length * 0.5) return false;
+    if (ans.split(/\s+/).length > 8) return false;
+    return true;
+}
+

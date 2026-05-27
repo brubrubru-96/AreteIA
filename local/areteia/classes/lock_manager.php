@@ -16,30 +16,31 @@ defined('MOODLE_INTERNAL') || die();
 class lock_manager {
 
     /**
-     * Determine if arstep has downstream content that needs protection.
+     * Determine if a step has downstream content that needs protection.
      *
-     * Step 0: locked if d1, s_sugs, or instrument exist
-     * Step 2: locked if d1 or s_sugs exist
-     * Step 3: locked if s_sugs or instrument exist
-     *
-     * @param int $step The current step number
+     * @param int    $step   The sequential step number (0, 1, etc.)
+     * @param string $action The current tab action (lib, eval, crit)
      * @return bool
      */
-    public static function is_locked(int $step): bool {
-        switch ($step) {
-            case 0:
-                return session_manager::has_any('d1', 's_sugs', 'instrument');
-            case 1:
-                return session_manager::has_any('d1', 'd2', 's_sugs', 'instrument');
-            case 2:
-                return session_manager::has_any('d1', 's_sugs');
-            case 3:
-                return session_manager::has_any('s_sugs', 'instrument');
-            case 4:
-                return session_manager::has_any('inst_content', 'rubric_content');
-            default:
-                return false;
+    public static function is_locked(int $step, string $action = 'eval'): bool {
+        if ($action === 'lib') {
+            switch ($step) {
+                case 1:
+                    return session_manager::has_any('d1', 'd2', 's_sugs', 'instrument');
+                default:
+                    return false;
+            }
+        } else if ($action === 'eval') {
+            switch ($step) {
+                case 0: // eval_pedagogy
+                    return session_manager::has_any('s_sugs', 'instrument');
+                case 1: // eval_suggestions
+                    return session_manager::has_any('inst_content', 'rubric_content');
+                default:
+                    return false;
+            }
         }
+        return false;
     }
 
     /**

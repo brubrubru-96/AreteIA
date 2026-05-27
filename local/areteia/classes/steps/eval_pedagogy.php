@@ -11,11 +11,11 @@ use local_areteia\rag_client;
 use local_areteia\step_renderer;
 
 /**
- * Step 3 — Diálogo con la IA.
+ * eval_pedagogy — Clarificación del objetivo de evaluación (Action: eval, Step: 3).
  * Four pedagogical dimensions (content type, objective, function, modality)
  * plus optional RAG-powered AI feedback.
  */
-class step3 {
+class eval_pedagogy {
 
     public static function render(array $ctx): void {
         global $PAGE;
@@ -33,15 +33,14 @@ class step3 {
         // URL params for links within this step
         $step_params = [
             'id'         => $id,
-            'step'       => 3,
+            'step'       => 0,
             'path'       => $path,
             'use_moodle' => $use_moodle,
             'ai'         => $show_ai,
         ];
 
-        $is_locked = lock_manager::is_locked(3);
+        $is_locked = lock_manager::is_locked(0, 'eval');
 
-        
         echo html_writer::tag('p', 'Clarificación del objetivo de evaluación', ['class' => 'areteia-stitle']);
         echo html_writer::tag('p', 'Dimensiones clave para definir qué y cómo evaluar.', ['class' => 'areteia-sdesc']);
 
@@ -178,12 +177,11 @@ class step3 {
 
         // Navigation
         $prev_url = new moodle_url($PAGE->url, array_merge($step_params, ['step' => 1, 'action' => 'lib']));
-        $next_url = new moodle_url($PAGE->url, array_merge($step_params, ['step' => 4]));
+        $next_url = new moodle_url($PAGE->url, array_merge($step_params, ['step' => 1]));
         $can_continue = ($d1 && $d2 && $d3 && $d4);
 
         echo html_writer::start_tag('div', ['class' => 'areteia-nav']);
         echo html_writer::link($prev_url, '← Anterior', ['class' => 'areteia-btn']);
-        
 
         $btn_class = 'areteia-btn areteia-btn-primary ' . ($can_continue ? '' : 'disabled');
         $btn_text  = $can_continue ? 'Ver instrumentos sugeridos →' : 'Completa todas las dimensiones';

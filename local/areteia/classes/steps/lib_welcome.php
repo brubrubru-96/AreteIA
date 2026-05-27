@@ -10,10 +10,10 @@ use local_areteia\lock_manager;
 use local_areteia\step_renderer;
 
 /**
- * Step 0 — Punto de entrada.
+ * lib_welcome — Punto de entrada (Action: lib, Step: 0).
  * The teacher chooses between importing from Moodle or manual context entry.
  */
-class step0 {
+class lib_welcome {
 
     public static function render(array $ctx): void {
         global $PAGE, $SESSION;

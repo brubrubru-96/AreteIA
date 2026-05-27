@@ -47,9 +47,33 @@ class action_handler {
                 self::handle_preview($course_id);
                 return true;
 
+            case 'adjust_item':
+                self::handle_adjust_item($course_id);
+                return true;
+
             case 'inject_quiz':
                 require_sesskey();
                 self::handle_inject_quiz($course_id, $base_url, $is_ajax);
+                return true;
+
+            case 'pdf_export_student':
+                require_sesskey();
+                self::handle_pdf_export($course_id, $base_url, 'student');
+                return true;
+
+            case 'pdf_export_teacher':
+                require_sesskey();
+                self::handle_pdf_export($course_id, $base_url, 'teacher');
+                return true;
+
+            case 'docx_export_student':
+                require_sesskey();
+                self::handle_docx_export($course_id, $base_url, 'student');
+                return true;
+
+            case 'docx_export_teacher':
+                require_sesskey();
+                self::handle_docx_export($course_id, $base_url, 'teacher');
                 return true;
 
             default:
@@ -201,7 +225,7 @@ class action_handler {
         }
 
         $redir = new \moodle_url($base_url, [
-            'step'     => 7,
+            'step'     => 3,
             'exported' => 1,
             'cmid'     => $moduleinfo->coursemodule,
             'action'   => $action,
@@ -247,7 +271,7 @@ class action_handler {
         // 2. Si no hay preguntas, error
         if (empty($questions)) {
             $redir = new \moodle_url($base_url, [
-                'step'         => 5,
+                'step'         => 2,
                 'quiz_error'   => 1,
                 'message'      => 'No se detectó una selección válida de ítems.'
             ]);
@@ -264,7 +288,7 @@ class action_handler {
         } catch (\Throwable $e) {
             error_log('[AreteIA] inject_quiz error in course ' . $course_id . ': ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             $redir = new \moodle_url($base_url, [
-                'step'         => 7,
+                'step'         => 3,
                 'action'       => 'eval',
                 'quiz_error'   => 1,
             ]);
@@ -272,7 +296,7 @@ class action_handler {
         }
 
         $redir = new \moodle_url($base_url, [
-            'step'         => 7,
+            'step'         => 3,
             'action'       => 'eval',
             'quiz_injected'=> 1,
             'quiz_cmid'    => $quiz_cmid,
@@ -284,36 +308,192 @@ class action_handler {
     }
 
     /**
-     * Returns the fake questions for quiz injection.
-     * Moved from step7 to action_handler for better availability.
+     * AJAX endpoint: adjust a single item with AI.
+     * Receives item JSON + user instruction, returns adjusted item JSON.
      */
-    public static function get_fake_questions(): array {
-        return [
-            [
-                'type'    => 'multichoice',
-                'text'    => 'Cual de los siguientes es un ejemplo de evaluacion formativa?',
-                'options' => [
-                    'Examen final del semestre',
-                    'Retroalimentacion continua durante el proceso de aprendizaje',
-                    'Prueba de admision universitaria',
-                    'Calificacion numerica trimestral',
-                ],
-                'correct' => 1,
-            ],
-            [
-                'type'    => 'truefalse',
-                'text'    => 'La taxonomia de Bloom clasifica los objetivos de aprendizaje en niveles cognitivos jerarquicos.',
-                'correct' => true,
-            ],
-            [
-                'type' => 'essay',
-                'text' => 'Describe como diseñarias una evaluacion autentica para tu asignatura. Fundamenta tu respuesta considerando el contexto pedagogico del curso.',
-            ],
-        ];
+    private static function handle_adjust_item(int $course_id): void {
+        global $PAGE;
+        header('Content-Type: application/json');
+
+        $item_json   = optional_param('item_json', '', PARAM_RAW);
+        $instruction = optional_param('instruction', '', PARAM_RAW);
+        $item_index  = optional_param('item_index', -1, PARAM_INT);
+
+        if (empty($item_json) || empty($instruction)) {
+            echo json_encode(['status' => 'error', 'message' => 'Faltan datos: ítem o instrucción vacíos.']);
+            die();
+        }
+
+        $item = json_decode($item_json, true);
+        if (!$item) {
+            echo json_encode(['status' => 'error', 'message' => 'No se pudo decodificar el ítem.']);
+            die();
+        }
+
+        try {
+            // Use step 5.1 to signal single-item adjustment to the Python service
+            $res_data = rag_client::generate([
+                'course_id'         => $course_id,
+                'course_title'      => $PAGE->course->fullname ?? '',
+                'step'              => 5.1,
+                'objective'         => session_manager::get('d2', ''),
+                'objective_json'    => session_manager::get('d2_json', ''),
+                'd1_content'        => session_manager::get('d1', ''),
+                'd3_function'       => session_manager::get('d3', ''),
+                'd4_modality'       => session_manager::get('d4', ''),
+                'chosen_instrument' => session_manager::get('instrument', ''),
+                'item'              => $item,
+                'feedback'          => $instruction,
+            ]);
+
+            if ($res_data && $res_data->status === 'success' && !empty($res_data->output)) {
+                $adjusted_item = $res_data->output;
+
+                // Persist the adjustment in session so page reloads keep changes
+                if ($item_index >= 0) {
+                    $inst_content_raw = session_manager::get('inst_content', '');
+                    $inst_data = json_decode($inst_content_raw, true);
+                    if ($inst_data && isset($inst_data['items'][$item_index])) {
+                        $inst_data['items'][$item_index] = (array)$adjusted_item;
+                        session_manager::set('inst_content', json_encode($inst_data));
+                    }
+                }
+
+                echo json_encode([
+                    'status' => 'success',
+                    'item'   => $adjusted_item,
+                    'usage'  => $res_data->usage ?? null
+                ]);
+            } else {
+                $msg = $res_data->message ?? 'La IA no devolvió un resultado válido.';
+                echo json_encode(['status' => 'error', 'message' => $msg]);
+            }
+        } catch (\Throwable $e) {
+            error_log('[AreteIA] adjust_item error: ' . $e->getMessage());
+            echo json_encode(['status' => 'error', 'message' => 'Error interno: ' . $e->getMessage()]);
+        }
+        die();
     }
 
     /**
-     * Fetch LLM prompt preview and return as JSON.
+     * Export the filtered selection to a PDF file.
+     */
+    private static function handle_pdf_export(int $course_id, \moodle_url $base_url, string $version): void {
+        global $PAGE, $CFG;
+
+        require_once($CFG->libdir . '/tcpdf/tcpdf.php');
+
+        $raw_selection = session_manager::get('final_selection_json', '');
+        if (empty($raw_selection)) {
+            $redir = new \moodle_url($base_url, [
+                'step' => 3,
+                'action' => 'eval',
+                'quiz_error' => 1,
+                'message' => 'No se encontró la selección final para generar el PDF.'
+            ]);
+            redirect($redir);
+        }
+
+        $parsed = json_decode($raw_selection, true);
+        if (!is_array($parsed) || empty($parsed['items'])) {
+            $redir = new \moodle_url($base_url, [
+                'step' => 3,
+                'action' => 'eval',
+                'quiz_error' => 1,
+                'message' => 'Los datos de la selección no son válidos para generar el PDF.'
+            ]);
+            redirect($redir);
+        }
+
+        $course_name = $PAGE->course->fullname ?? 'Curso';
+        $title = $parsed['title'] ?? session_manager::get('instrument', 'Evaluación Final');
+        $justification = $parsed['justification'] ?? '';
+        $objectives_data = json_decode(session_manager::get('d2_json', ''), true) ?: [];
+
+        $pdf_content = '';
+        if ($version === 'student') {
+            $pdf_content = pdf_generator::generate_student_pdf($parsed['items'], $title, $course_name);
+            $suffix = 'Estudiante';
+        } else {
+            $pdf_content = pdf_generator::generate_teacher_pdf($parsed['items'], $title, $course_name, $justification, $objectives_data);
+            $suffix = 'Profesor';
+        }
+
+        $filename = clean_filename($title . ' - ' . $suffix) . '.pdf';
+
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
+
+        echo $pdf_content;
+        exit();
+    }
+
+    /**
+     * Export the filtered selection to a DOCX file.
+     */
+    private static function handle_docx_export(int $course_id, \moodle_url $base_url, string $version): void {
+        global $PAGE;
+
+        $raw_selection = session_manager::get('final_selection_json', '');
+        if (empty($raw_selection)) {
+            $redir = new \moodle_url($base_url, [
+                'step' => 3,
+                'action' => 'eval',
+                'quiz_error' => 1,
+                'message' => 'No se encontró la selección final para generar el documento.'
+            ]);
+            redirect($redir);
+        }
+
+        $parsed = json_decode($raw_selection, true);
+        if (!is_array($parsed) || empty($parsed['items'])) {
+            $redir = new \moodle_url($base_url, [
+                'step' => 3,
+                'action' => 'eval',
+                'quiz_error' => 1,
+                'message' => 'Los datos de la selección no son válidos para generar el documento.'
+            ]);
+            redirect($redir);
+        }
+
+        $course_name = $PAGE->course->fullname ?? 'Curso';
+        $title = $parsed['title'] ?? session_manager::get('instrument', 'Evaluación Final');
+        $justification = $parsed['justification'] ?? '';
+        $objectives_data = json_decode(session_manager::get('d2_json', ''), true) ?: [];
+
+        $docx_content = '';
+        if ($version === 'student') {
+            $docx_content = docx_generator::generate_student_docx($parsed['items'], $title, $course_name);
+            $suffix = 'Estudiante';
+        } else {
+            $docx_content = docx_generator::generate_teacher_docx($parsed['items'], $title, $course_name, $justification, $objectives_data);
+            $suffix = 'Profesor';
+        }
+
+        $filename = clean_filename($title . ' - ' . $suffix) . '.docx';
+
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
+
+        echo $docx_content;
+        exit();
+    }
+
+    /**
+     * Returns the fake questions for quiz injection.
+     * Moved from step7 to action_handler for better availability.
      */
     private static function handle_preview(int $course_id): void {
         header('Content-Type: application/json');
