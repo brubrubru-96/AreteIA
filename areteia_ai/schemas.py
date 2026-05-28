@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
 from typing import Any, List, Optional
 
 class SuggestionItem(BaseModel):
@@ -26,6 +26,18 @@ class InstrumentItem(BaseModel):
     pairs: Optional[List[ItemPair]] = None # For Matching
     short_answer: Optional[str] = None # For Short Answer
     numerical_value: Optional[float] = None # For Numerical
+
+    @root_validator(pre=True)
+    def normalize_consiga(cls, values):
+        """Accept alternative field names the LLM may use instead of 'consiga'."""
+        if not values.get('consiga'):
+            for alt in ('text', 'tarea', 'pregunta', 'texto', 'question',
+                        'enunciado', 'descripcion', 'descripción', 'instruccion',
+                        'instrucción', 'actividad'):
+                if values.get(alt):
+                    values['consiga'] = values[alt]
+                    break
+        return values
 
 class InstrumentDesign(BaseModel):
     title: str
