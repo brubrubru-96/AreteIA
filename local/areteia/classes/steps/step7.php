@@ -568,31 +568,6 @@ class step7 {
         echo html_writer::end_tag('div');
 
         // ----------------------------------------------------------------
-        // Assign injection success block
-        // ----------------------------------------------------------------
-        if ($assign_injected == 1) {
-            $assign_cmid = optional_param('assign_cmid', 0, PARAM_INT);
-            echo html_writer::start_tag('div', [
-                'class' => 'areteia-card',
-                'style' => 'border-left:5px solid #28a745; background:#f4fff4; margin-top:20px;',
-            ]);
-            echo html_writer::tag('strong', '🎯 ¡Tarea publicada en Moodle!', [
-                'style' => 'color:#28a745; display:block; margin-bottom:5px;',
-            ]);
-            echo html_writer::tag('p', 'La tarea con entrega fue creada correctamente.', [
-                'style' => 'font-size:12px; margin-bottom:10px;',
-            ]);
-            if ($assign_cmid) {
-                echo html_writer::link(
-                    new moodle_url('/mod/assign/view.php', ['id' => $assign_cmid]),
-                    'Ir a la tarea ↗',
-                    ['class' => 'areteia-btn areteia-btn-primary external', 'target' => '_blank']
-                );
-            }
-            echo html_writer::end_tag('div');
-        }
-
-        // ----------------------------------------------------------------
         // Success / Error banners for all activity types
         // ----------------------------------------------------------------
         $quiz_error      = optional_param('quiz_error', 0, PARAM_INT);
