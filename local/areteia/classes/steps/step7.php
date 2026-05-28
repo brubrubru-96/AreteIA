@@ -228,26 +228,6 @@ class step7 {
 
         echo html_writer::tag('p', 'Instrumento de evaluación finalizado', ['class' => 'areteia-stitle']);
 
-        // Export success banner
-        if ($exported == 1) {
-            echo html_writer::start_tag('div', [
-                'class' => 'areteia-card',
-                'style' => 'border-left: 5px solid #28a745; background: #f4fff4; margin-bottom:20px;',
-            ]);
-            echo html_writer::tag('strong', '🚀 ¡Actividad publicada en Moodle!', [
-                'style' => 'color:#28a745; display:block; margin-bottom:5px;',
-            ]);
-            echo html_writer::tag('p', 'La tarea ha sido creada exitosamente.', [
-                'style' => 'font-size:12px; margin-bottom:10px;',
-            ]);
-            echo html_writer::link(
-                new moodle_url('/mod/assign/view.php', ['id' => $cmid]),
-                'Ir a la actividad en Moodle ↗',
-                ['class' => 'areteia-btn areteia-btn-primary external', 'target' => '_blank']
-            );
-            echo html_writer::end_tag('div');
-        }
-
         // Determine activity type from instrument
         $activity_type = encaje_table::get_activity_type($instrument);
         $activity_label = encaje_table::ACTIVITY_TYPE_LABELS[$activity_type] ?? 'Tarea';
@@ -546,7 +526,7 @@ class step7 {
         $prev_url   = new moodle_url($PAGE->url, ['step' => 6]); // Now goes back to 5 due to sequence update
         $export_url = new moodle_url($PAGE->url, ['action' => 'export', 'sesskey' => sesskey()]);
 
-        if ($exported == 1 || $any_published) {
+        if ($any_published) {
             step_renderer::render_nav(7, $prev_url, null, '', [], '✔ Publicado con éxito');
         } else {
             step_renderer::render_nav(7, $prev_url, null);
