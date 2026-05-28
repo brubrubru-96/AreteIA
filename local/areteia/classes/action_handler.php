@@ -421,6 +421,15 @@ class action_handler {
                 $parts[] = '## ' . $data['title'];
             }
 
+            // Scenario/case narrative must appear before items (Estudio de caso, Debate, Rol, etc.)
+            if (!empty($data['scenario'])) {
+                $parts[] = '';
+                $parts[] = '### 📖 Escenario / Contexto';
+                $parts[] = $data['scenario'];
+                $parts[] = '';
+                $parts[] = '---';
+            }
+
             foreach (($data['items'] ?? []) as $idx => $item) {
                 $num = $idx + 1;
                 $type_label = $item['type'] ?? 'Ítem';
