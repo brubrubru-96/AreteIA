@@ -1,5 +1,90 @@
 # AreteIA — Plataforma de Asistencia Pedagógica Basada en IA y RAG
 
+Presentación: https://drive.google.com/file/d/1H2txzKzobje5fka-ZP_q1HMDnrc1KKIT/view?usp=drive_link
+
+¿Qué es AretéIA?
+
+AretéIA es una plataforma de asistencia pedagógica basada en Inteligencia Artificial diseñada para acompañar a los equipos docentes en la construcción de instrumentos de evaluación alineados con los objetivos de aprendizaje de sus asignaturas.
+
+Se integra con Moodle mediante un plugin institucional y utiliza técnicas de Recuperación Aumentada por Generación (RAG, Retrieval-Augmented Generation) para analizar los materiales disponibles en el aula virtual y generar propuestas contextualizadas.
+
+Su objetivo es apoyar la planificación y diseño de evaluaciones, promoviendo la coherencia entre contenidos, objetivos de aprendizaje y estrategias de evaluación.
+
+Funcionalidades disponibles en el piloto
+
+La versión actualmente disponible para pilotado permite:
+
+Analizar materiales presentes en un aula Moodle en formato PDF.
+Construir una base de conocimiento a partir de esos materiales.
+Asistir en la creación de instrumentos de evaluación alineadas con los contenidos trabajados, y con los objetivos y criterios especificados por los docentes, incorporando materiales sobre evaluación elaborados específicamente.
+
+Las respuestas generadas se fundamentan en:
+
+Los contenidos reales disponibles en el aula virtual.
+Materiales pedagógicos incorporados por la institución.
+Los criterios configurados para el diseño de instrumentos de evaluación.
+
+
+Arquitectura general
+
+AretéIA está compuesto por dos componentes principales:
+
+Plugin Moodle
+
+Se instala como un plugin local de Moodle.
+
+Sus responsabilidades incluyen:
+
+Proporcionar la interfaz de usuario.
+Gestionar permisos y acceso desde Moodle.
+Recuperar información del curso.
+Enviar solicitudes al servicio de IA.
+Servicio de Inteligencia Artificial
+
+Se ejecuta como un servicio independiente desarrollado en Python (FastAPI).
+
+Sus responsabilidades incluyen:
+
+Procesar documentos.
+Generar embeddings.
+Construir y consultar índices semánticos.
+Ejecutar búsquedas RAG.
+Interactuar con el modelo de lenguaje configurado.
+
+La comunicación entre Moodle y el servicio de IA se realiza mediante APIs internas.
+
+Requerimientos de infraestructura
+Plataforma educativa
+Moodle operativo.
+Conectividad
+Acceso a red durante la utilización del sistema.
+Conectividad entre Moodle y el servicio de IA.
+Conectividad saliente hacia el proveedor del modelo de lenguaje utilizado.
+Servicio de IA
+Docker o Docker Compose.
+Sistema operativo Linux.
+Recursos recomendados para pilotado
+16 vCPU.
+16 GB de RAM.
+50 GB de almacenamiento disponible.
+
+Los requerimientos pueden variar según:
+
+Cantidad de usuarios concurrentes.
+Volumen de documentos procesados.
+Modelo de lenguaje utilizado.
+Estrategia de indexación y persistencia de datos.
+Modelo de lenguaje
+
+Consideraciones de implementación
+
+AretéIA puede instalarse:
+
+Sobre un Moodle institucional existente.
+Como parte de una instalación nueva de Moodle.
+
+La arquitectura desacoplada entre Moodle y el servicio de IA permite actualizar o reemplazar componentes de forma independiente y facilita futuras integraciones con distintos proveedores de modelos de lenguaje.
+
 AreteIA es una plataforma educativa de última generación que se integra en **Moodle** como un bloque local (`local/areteia`). Su propósito es asistir a los equipos docentes en el diseño, estructuración y alineación pedagógica de sus instrumentos de evaluación (tareas, cuestionarios y foros de debate) utilizando técnicas avanzadas de **RAG (Retrieval-Augmented Generation)** y LLMs (Modelos de Lenguaje de Gran Escala).
 
 El sistema garantiza la **alineación constructiva**: las evaluaciones generadas se fundamentan estrictamente en el contenido real cargado en el aula virtual y siguen las directrices pedagógicas e institucionales definidas por la institución.
