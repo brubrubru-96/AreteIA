@@ -4,7 +4,7 @@
 set -e
 
 REPO_DIR="/root/areteia"
-BRANCH="propuesta-fix-prompt-building"
+BRANCH="integracion"
 MOODLE="/home/citepcloud.net.ar/domains/campus.citepcloud.net.ar/public_html"
 PHP="php81"
 FPM_SERVICE="php81-php-fpm"
@@ -20,6 +20,9 @@ cp -r "$REPO_DIR/local/areteia" "$MOODLE/local/areteia"
 
 echo "--- [3/6] Purgar caché de Moodle ---"
 "$PHP" "$MOODLE/admin/cli/purge_caches.php"
+
+echo "--- [3b/6] Upgrade Moodle (registra capabilities nuevas) ---"
+"$PHP" "$MOODLE/admin/cli/upgrade.php" --non-interactive
 
 echo "--- [4/6] Reiniciar PHP-FPM (limpia opcache) ---"
 systemctl restart "$FPM_SERVICE"
