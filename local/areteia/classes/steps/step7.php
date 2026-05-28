@@ -436,19 +436,33 @@ class step7 {
                 'style' => 'color:#185fa5; font-size:1.1em; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;',
             ]);
 
-            // Instrument preview
-            echo html_writer::tag('div', '<strong>Consignas e Ítems:</strong>', [
-                'style' => 'font-size:13px; font-weight:bold; margin-bottom:5px;',
+            // Instrument preview — parse JSON so we show formatted content, not raw JSON
+            $inst_data = @json_decode($inst_content, true);
+            echo html_writer::start_tag('div', [
+                'class' => 'areteia-markdown-content',
+                'style' => 'font-size:12px; background:#fcfcfc; padding:12px; border-radius:8px; margin-bottom:15px; border:1px solid #eee; max-height:350px; overflow-y:auto;',
             ]);
-            
-            $preview_inst = mb_strimwidth($inst_content, 0, 500, '...');
-            echo html_writer::tag('div',
-                format_text($preview_inst, FORMAT_MARKDOWN, ['context' => $context]),
-                [
-                    'class' => 'areteia-markdown-content',
-                    'style' => 'font-size:12px; background:#fcfcfc; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #eee;',
-                ]
-            );
+            if (is_array($inst_data)) {
+                if (!empty($inst_data['title'])) {
+                    echo html_writer::tag('strong', s($inst_data['title']), ['style' => 'display:block; color:#185fa5; font-size:1em; margin-bottom:8px;']);
+                }
+                if (!empty($inst_data['scenario'])) {
+                    echo html_writer::start_tag('div', ['style' => 'background:#fffbea; border-left:4px solid #f59e0b; padding:10px; border-radius:6px; margin-bottom:10px;']);
+                    echo html_writer::tag('div', '📖 <strong>Escenario / Contexto</strong>', ['style' => 'color:#92400e; font-size:11px; margin-bottom:6px;']);
+                    echo format_text($inst_data['scenario'], FORMAT_MARKDOWN, ['context' => $context]);
+                    echo html_writer::end_tag('div');
+                }
+                foreach (($inst_data['items'] ?? []) as $idx => $item) {
+                    echo html_writer::start_tag('div', ['style' => 'margin-bottom:8px; border-bottom:1px solid #f0f0f0; padding-bottom:6px;']);
+                    echo html_writer::tag('div', '<strong>' . ($idx + 1) . '. ' . s($item['type'] ?? '') . '</strong>', ['style' => 'color:#6c63ff; font-size:11px;']);
+                    echo html_writer::tag('div', format_text($item['consiga'] ?? $item['text'] ?? '', FORMAT_MARKDOWN, ['context' => $context]), ['style' => 'font-size:12px;']);
+                    echo html_writer::end_tag('div');
+                }
+            } else {
+                // Fallback: show truncated raw content
+                echo html_writer::tag('div', s(mb_strimwidth($inst_content, 0, 500, '...')), ['style' => 'font-size:12px;']);
+            }
+            echo html_writer::end_tag('div');
 
             // Rubric preview
             if (!empty($rubric_content)) {
