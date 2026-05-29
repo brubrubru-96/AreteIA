@@ -24,7 +24,7 @@ class step_renderer {
             'icon'  => '📝'
         ],
         'crit' => [
-            'label' => 'Crear Criterio de Evaluación',
+            'label' => 'Crear apoyo',
             'steps' => [6, 7],
             'icon'  => '⚖️'
         ]

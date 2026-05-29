@@ -25,6 +25,7 @@ class action_handler {
     public static function handle(string $action, int $course_id, \moodle_url $base_url, bool $is_ajax): bool {
         switch ($action) {
             case 'sync':
+                require_sesskey();
                 self::handle_sync($course_id, $base_url, $is_ajax);
                 return true; // never reached
 
@@ -60,6 +61,32 @@ class action_handler {
             case 'inject_forum':
                 require_sesskey();
                 self::handle_inject_forum($course_id, $base_url, $is_ajax);
+                return true;
+
+            case 'export_pdf':
+                self::handle_export_pdf($course_id, 'student');
+                return true;
+
+            case 'export_pdf_teacher':
+                self::handle_export_pdf($course_id, 'teacher');
+                return true;
+
+            case 'export_docx':
+                self::handle_export_docx($course_id, 'student');
+                return true;
+
+            case 'export_docx_teacher':
+                self::handle_export_docx($course_id, 'teacher');
+                return true;
+
+            case 'adjust_item':
+                require_sesskey();
+                self::handle_adjust_item($course_id, $base_url, $is_ajax);
+                return true;
+
+            case 'save_item':
+                require_sesskey();
+                self::handle_save_item($course_id, $base_url);
                 return true;
 
             default:
@@ -108,6 +135,9 @@ class action_handler {
         $selected_files_raw = optional_param('selected_files', '', PARAM_RAW);
         error_log("[AreteIA] handle_ingest course={$course_id} selected_files_raw=" . substr($selected_files_raw, 0, 300));
 
+        // Always define base_sync_dir (used below regardless of branch taken)
+        $base_sync_dir = rtrim($CFG->dataroot . '/areteia_sync/course_' . $course_id, '/');
+
         if (!empty($selected_files_raw)) {
             $selected_files = json_decode($selected_files_raw, true);
 
@@ -118,8 +148,6 @@ class action_handler {
                 }, $selected_files);
 
                 error_log("[AreteIA] Selected files (" . count($selected_files) . "): " . implode(', ', $selected_files));
-
-                $base_sync_dir = rtrim($CFG->dataroot . '/areteia_sync/course_' . $course_id, '/');
 
                 if (file_exists($base_sync_dir)) {
                     $directory = new \RecursiveDirectoryIterator($base_sync_dir, \RecursiveDirectoryIterator::SKIP_DOTS);
@@ -293,6 +321,7 @@ class action_handler {
         redirect($redir);
     }
 
+
     /**
      * Returns the fake questions for quiz injection.
      * Moved from step7 to action_handler for better availability.
@@ -415,6 +444,15 @@ class action_handler {
                 $parts[] = '## ' . $data['title'];
             }
 
+            // Scenario/case narrative must appear before items (Estudio de caso, Debate, Rol, etc.)
+            if (!empty($data['scenario'])) {
+                $parts[] = '';
+                $parts[] = '### 📖 Escenario / Contexto';
+                $parts[] = $data['scenario'];
+                $parts[] = '';
+                $parts[] = '---';
+            }
+
             foreach (($data['items'] ?? []) as $idx => $item) {
                 $num = $idx + 1;
                 $type_label = $item['type'] ?? 'Ítem';
@@ -492,5 +530,251 @@ class action_handler {
         $res = rag_client::preview_prompt($data);
         echo json_encode($res ?: ['status' => 'error', 'message' => 'Servicio de IA no disponible']);
         die();
+    }
+
+    /**
+     * Resolve export data from session: prefer final_selection_json (quiz instruments),
+     * fall back to inst_content (non-quiz: case study, essay, etc.).
+     * Returns [items, title, scenario, justification, objectives_data].
+     */
+    private static function resolve_export_data(): array {
+        $instrument    = session_manager::get('instrument', 'Evaluación');
+        $final_raw     = session_manager::get('final_selection_json', '');
+        $final_decoded = $final_raw ? json_decode($final_raw, true) : null;
+
+        if (!empty($final_decoded['items'])) {
+            // Quiz / TAREA CON ENTREGA path — items already in generator format
+            $items          = $final_decoded['items'];
+            $title          = $final_decoded['title']         ?? $instrument;
+            $scenario       = $final_decoded['scenario']      ?? '';
+            $justification  = $final_decoded['justification'] ?? '';
+            $objectives_data = json_decode(session_manager::get('d2_json', ''), true) ?: [];
+        } else {
+            // Non-quiz path — build items from inst_content
+            $inst_raw  = session_manager::get('inst_content', '');
+            $inst_data = $inst_raw ? (json_decode($inst_raw, true) ?? []) : [];
+
+            $raw_items = $inst_data['items'] ?? [];
+            $items = [];
+            foreach ($raw_items as $item) {
+                $items[] = [
+                    'type'        => $item['type']       ?? 'essay',
+                    'text'        => $item['consiga']    ?? $item['text'] ?? '',
+                    'points'      => $item['points']     ?? 0,
+                    'difficulty'  => $item['difficulty'] ?? '',
+                    'objectives'  => $item['objectives'] ?? [],
+                ];
+            }
+
+            $title           = $inst_data['title']         ?? $instrument;
+            $scenario        = $inst_data['scenario']      ?? '';
+            $justification   = $inst_data['justification'] ?? '';
+            $objectives_data = json_decode(session_manager::get('d2_json', ''), true) ?: [];
+        }
+
+        return [$items, $title, $scenario, $justification, $objectives_data];
+    }
+
+    /**
+     * Export instrument as a PDF download (student or teacher version).
+     * No sesskey required — read-only download.
+     */
+    private static function handle_export_pdf(int $course_id, string $version = 'student'): void {
+        global $CFG, $PAGE;
+
+        [$items, $title, $scenario, $justification, $objectives_data] = self::resolve_export_data();
+
+        $course_name = $PAGE->course->fullname ?? 'Curso';
+        $suffix      = ($version === 'teacher') ? 'Docente' : 'Estudiante';
+        $filename    = \clean_filename($title . ' - ' . $suffix) . '.pdf';
+
+        $tcpdf_path = $CFG->libdir . '/tcpdf/tcpdf.php';
+        if (!file_exists($tcpdf_path)) {
+            $tcpdf_path = $CFG->libdir . '/pdflib.php';
+        }
+
+        if (file_exists($tcpdf_path)) {
+            require_once(__DIR__ . '/pdf_generator.php');
+            require_once($tcpdf_path);
+            try {
+                if ($version === 'teacher') {
+                    $pdf_content = \local_areteia\pdf_generator::generate_teacher_pdf(
+                        $items, $title, $course_name, $justification, $objectives_data, $scenario
+                    );
+                } else {
+                    $pdf_content = \local_areteia\pdf_generator::generate_student_pdf(
+                        $items, $title, $course_name, $scenario
+                    );
+                }
+                while (ob_get_level() > 0) { ob_end_clean(); }
+                header('Content-Type: application/pdf');
+                header('Content-Disposition: attachment; filename="' . $filename . '"');
+                header('Cache-Control: private, max-age=0, must-revalidate');
+                echo $pdf_content;
+                exit;
+            } catch (\Throwable $e) {
+                // Fall through to HTML fallback
+            }
+        }
+
+        // Fallback: serve printable HTML (student content only)
+        $safe = preg_replace('/[^a-zA-Z0-9_-]/', '_', $title);
+        $h  = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">';
+        $h .= '<title>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</title>';
+        $h .= '<style>body{font-family:Georgia,serif;font-size:12pt;max-width:820px;margin:0 auto;padding:30px;}';
+        $h .= 'h1{font-size:18pt;border-bottom:2px solid #6c63ff;padding-bottom:8px;color:#2d2d6d;}';
+        $h .= '.scenario{background:#fffbea;border-left:5px solid #f59e0b;padding:14px 18px;margin:16px 0;}';
+        $h .= 'ol li{margin-bottom:12px;}</style></head><body>';
+        $h .= '<h1>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h1>';
+        if (!empty($scenario)) {
+            $h .= '<div class="scenario">' . nl2br(htmlspecialchars($scenario, ENT_QUOTES, 'UTF-8')) . '</div>';
+        }
+        $h .= '<ol>';
+        foreach ($items as $item) {
+            $h .= '<li>' . nl2br(htmlspecialchars($item['text'] ?? $item['consiga'] ?? '', ENT_QUOTES, 'UTF-8')) . '</li>';
+        }
+        $h .= '</ol>';
+        if ($version === 'teacher' && !empty($justification)) {
+            $h .= '<hr><p><em>' . htmlspecialchars($justification, ENT_QUOTES, 'UTF-8') . '</em></p>';
+        }
+        $h .= '</body></html>';
+
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: text/html; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="AreteIA_' . $safe . '_' . $suffix . '.html"');
+        echo $h;
+        exit;
+    }
+
+    /**
+     * Export instrument as a DOCX download (student or teacher version).
+     * No sesskey required — read-only download.
+     */
+    private static function handle_export_docx(int $course_id, string $version = 'student'): void {
+        global $PAGE;
+
+        [$items, $title, $scenario, $justification, $objectives_data] = self::resolve_export_data();
+
+        $course_name = $PAGE->course->fullname ?? 'Curso';
+        $suffix      = ($version === 'teacher') ? 'Docente' : 'Estudiante';
+        $filename    = \clean_filename($title . ' - ' . $suffix) . '.docx';
+
+        require_once(__DIR__ . '/docx_generator.php');
+
+        if ($version === 'teacher') {
+            $docx_content = \local_areteia\docx_generator::generate_teacher_docx(
+                $items, $title, $course_name, $justification, $objectives_data, $scenario
+            );
+        } else {
+            $docx_content = \local_areteia\docx_generator::generate_student_docx(
+                $items, $title, $course_name, $scenario
+            );
+        }
+
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        echo $docx_content;
+        exit;
+    }
+
+    // ------------------------------------------------------------------
+    // Step 5.1 — AI-assisted single-item adjustment
+    // ------------------------------------------------------------------
+
+    /**
+     * Adjust a single item via the Python step-5.1 endpoint.
+     * Reads item_index + feedback from GET params, patches inst_content in session.
+     */
+    private static function handle_adjust_item(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
+        global $PAGE;
+
+        $item_index  = optional_param('item_index', -1, PARAM_INT);
+        $instruction = optional_param('feedback',   '',  PARAM_TEXT);
+        // Strip "[Ítem N] " prefix added by JS
+        $instruction = preg_replace('/^\[Ítem \d+\]\s*/u', '', $instruction);
+
+        $redir = new \moodle_url($base_url, ['step' => 5, 'id' => $course_id]);
+
+        if ($item_index < 0 || trim($instruction) === '') {
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode(['redirect' => $redir->out(false)]);
+                exit;
+            }
+            redirect($redir);
+            return;
+        }
+
+        $raw_content = session_manager::get('inst_content', '');
+        $data = $raw_content ? json_decode($raw_content, true) : null;
+
+        if (!$data || !isset($data['items'][$item_index])) {
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode(['redirect' => $redir->out(false)]);
+                exit;
+            }
+            redirect($redir);
+            return;
+        }
+
+        $res = rag_client::generate([
+            'course_id'          => $course_id,
+            'course_title'       => $PAGE->course->fullname,
+            'step'               => 5.1,
+            'item'               => $data['items'][$item_index],
+            'feedback'           => $instruction,
+            'objective_json'     => session_manager::get('d2_json', ''),
+            'chosen_instrument'  => session_manager::get('instrument', ''),
+        ]);
+
+        if ($res && isset($res->status) && $res->status === 'success' && !empty($res->output)) {
+            // Convert stdClass to assoc array and patch the item
+            $new_item = json_decode(json_encode($res->output), true);
+            if (is_array($new_item)) {
+                $data['items'][$item_index] = $new_item;
+                session_manager::set('inst_content', json_encode($data));
+            }
+        }
+
+        if ($is_ajax) {
+            header('Content-Type: application/json');
+            echo json_encode(['redirect' => $redir->out(false)]);
+            exit;
+        }
+        redirect($redir);
+    }
+
+    /**
+     * Save manually-edited item fields (consiga, difficulty, points) into session.
+     */
+    private static function handle_save_item(int $course_id, \moodle_url $base_url): void {
+        $item_index  = optional_param('item_index',    -1,   PARAM_INT);
+        $new_consiga = optional_param('item_consiga',  '',   PARAM_TEXT);
+        $difficulty  = optional_param('item_difficulty', '', PARAM_TEXT);
+        $points      = optional_param('item_points',   null, PARAM_FLOAT);
+
+        if ($item_index >= 0) {
+            $raw_content = session_manager::get('inst_content', '');
+            $data = $raw_content ? json_decode($raw_content, true) : null;
+
+            if ($data && isset($data['items'][$item_index])) {
+                if (trim($new_consiga) !== '') {
+                    $data['items'][$item_index]['consiga'] = $new_consiga;
+                }
+                $allowed_difficulties = ['Fácil', 'Media', 'Difícil'];
+                if (in_array($difficulty, $allowed_difficulties, true)) {
+                    $data['items'][$item_index]['difficulty'] = $difficulty;
+                }
+                if ($points !== null && $points > 0) {
+                    $data['items'][$item_index]['points'] = $points;
+                }
+                session_manager::set('inst_content', json_encode($data));
+            }
+        }
+
+        redirect(new \moodle_url($base_url, ['step' => 5, 'id' => $course_id]));
     }
 }

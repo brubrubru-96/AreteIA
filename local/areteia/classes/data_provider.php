@@ -846,7 +846,7 @@ class data_provider {
         $course = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
         $module = $DB->get_record('modules', ['name' => 'assign'], '*', MUST_EXIST);
         
-        // Find or create a valid section
+        // Find a valid section: use $section_num if given, otherwise first non-zero section
         $modinfo = get_fast_modinfo($course);
         $sections = $modinfo->get_section_info_all();
         $sectionid = 0;

@@ -56,11 +56,37 @@ class rag_client {
      * @return object|null  { status, chunks, ... }
      */
     public static function ingest(int $course_id, array $selected_files = [], string $base_sync_dir = ''): ?object {
+
+        // ----------------------------------------------------------------
+        // Fast path: shared filesystem (bare-metal VPS).
+        // If the sync directory is accessible here, Python is likely on the
+        // same machine and can read files directly — no HTTP upload needed.
+        // ----------------------------------------------------------------
+        if (!empty($base_sync_dir) && is_dir($base_sync_dir)) {
+            $payload  = json_encode([
+                'course_id'      => $course_id,
+                'base_sync_dir'  => $base_sync_dir,
+                'selected_files' => $selected_files,
+            ]);
+            $response = self::post('/ingest', $payload, 600, 30);
+            $decoded  = @json_decode($response);
+            // If Python could access the path, return its response directly.
+            if ($decoded && (!isset($decoded->status) || $decoded->status !== 'path_unavailable')) {
+                return $decoded;
+            }
+            // Python is on a different filesystem (e.g. Docker without a shared volume).
+            // Fall through to the multipart upload below.
+            error_log('[AreteIA] rag_client::ingest: path-based unavailable, falling back to multipart.');
+        }
+
+        // ----------------------------------------------------------------
+        // Fallback: multipart upload (Docker / remote Python service).
+        // ----------------------------------------------------------------
         $post_data = ['course_id' => $course_id];
-        
-        if (!empty($base_sync_dir) && file_exists($base_sync_dir)) {
+
+        if (!empty($base_sync_dir) && is_dir($base_sync_dir)) {
             $idx = 0;
-            
+
             // If no specific files are provided, we scan the directory to send EVERYTHING
             if (empty($selected_files)) {
                 $directory = new \RecursiveDirectoryIterator($base_sync_dir, \RecursiveDirectoryIterator::SKIP_DOTS);
@@ -77,8 +103,6 @@ class rag_client {
                     $file_path = $base_sync_dir . '/' . $relative_path;
                     if (file_exists($file_path)) {
                         $mime = mime_content_type($file_path) ?: 'application/octet-stream';
-                        // curl_file_create allows us to send the file via multipart/form-data
-                        // The 3rd parameter sets the 'filename' property in the HTTP request to the relative path
                         $post_data["files[$idx]"] = curl_file_create($file_path, $mime, $relative_path);
                         $idx++;
                     }

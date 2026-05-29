@@ -102,7 +102,7 @@ class step3 {
 
         $bloom_options = [
             'RECORDAR' => 'Memorizar información, reconocer datos, ideas o principios.',
-            'ENTENDER' => 'Comprender el significado de la información, explicar conceptos e interpretar hechos.',
+            'COMPRENDER' => 'Comprender el significado de la información, explicar conceptos e interpretar hechos.',
             'APLICAR' => 'Utilizar el conocimiento adquirido en situaciones nuevas o prácticas.',
             'ANALIZAR' => 'Descomponer la información en partes, identificar motivos o causas y organizar ideas.',
             'EVALUAR' => 'Justificar una postura, emitir juicios de valor sobre información y verificar el valor de la evidencia.',

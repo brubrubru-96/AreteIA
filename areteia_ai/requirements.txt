@@ -9,5 +9,5 @@ pydantic
 python-pptx
 langchain==0.0.202
 dashscope
-python-dotenv
 openai
+python-dotenv

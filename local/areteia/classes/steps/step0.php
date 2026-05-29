@@ -35,6 +35,7 @@ class step0 {
             'step'       => 1,
             'use_moodle' => 1,
             'action'     => 'sync', // Auto sync
+            'sesskey'    => sesskey(),
         ]);
 
         step_renderer::render_nav(
