@@ -705,3 +705,4 @@ Modifica SOLO lo que el docente indica. Mantén todo lo demás igual.
   "points": 1.0
   // ...campos específicos del tipo si aplica
 }}
+"""
