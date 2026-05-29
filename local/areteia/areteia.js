@@ -510,6 +510,28 @@ function initItemAdjustmentUI() {
             trigger.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "Ajustar con IA ✨";
         }
     });
+
+    // Manual edit trigger toggle
+    document.addEventListener("click", e => {
+        const trigger = e.target.closest(".item-edit-trigger");
+        if (trigger) {
+            const index = trigger.dataset.index;
+            const tray = document.querySelector(`.item-edit-tray[data-index="${index}"]`);
+            if (tray) {
+                tray.classList.toggle("active");
+                trigger.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "✏️ Editar";
+            }
+            return;
+        }
+        const cancel = e.target.closest(".item-edit-cancel");
+        if (cancel) {
+            const index = cancel.dataset.index;
+            const tray = document.querySelector(`.item-edit-tray[data-index="${index}"]`);
+            if (tray) tray.classList.remove("active");
+            const trigger2 = document.querySelector(`.item-edit-trigger[data-index="${index}"]`);
+            if (trigger2) trigger2.innerHTML = "✏️ Editar";
+        }
+    });
 }
 
 /**

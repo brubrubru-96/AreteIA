@@ -626,3 +626,82 @@ def get_correction_prompt(correction_type, correction_label, chosen_instrument, 
 
   ### FORMATO DE RESPUESTA (JSON ÚNICAMENTE):
   {info['schema']}"""
+
+
+def get_adjust_item_prompt(item: dict, instruction: str, valid_types=None, objective_json=None) -> str:
+    """
+    Prompt for step 5.1: refine a SINGLE existing item based on a docent instruction.
+    Returns a prompt that produces one InstrumentItem JSON.
+    """
+    valid_types = valid_types or []
+    current_type = item.get("type", "")
+
+    # Build the allowed types section
+    if valid_types:
+        type_lines = "\n".join(
+            f"  - {t.get('name', t.get('id', ''))}: {t.get('description', '')}"
+            for t in valid_types
+        )
+        types_section = f"""### TIPOS DE ÍTEM PERMITIDOS PARA ESTE INSTRUMENTO:
+{type_lines}
+
+REGLA: Mantén el tipo actual ("{current_type}") a menos que el docente pida explícitamente cambiarlo.
+Si solicita cambiar el tipo, elige ÚNICAMENTE de la lista anterior.
+"""
+    else:
+        types_section = f'Mantén el tipo actual: "{current_type}"\n'
+
+    # Build objectives section
+    obj_section = ""
+    if objective_json:
+        obj_section = f"""### OBJETIVOS DE APRENDIZAJE (contexto):
+{objective_json}
+
+"""
+
+    # Build per-type field guidance
+    type_field_hints = {
+        "Opción múltiple": "Incluye 'alternativas' (lista de strings, 2-5 opciones) y 'correct_index' (int 0-based).",
+        "Verdadero/Falso": "Incluye 'correct_boolean' (true o false).",
+        "Completar pares": "Incluye 'pairs' (lista de objetos con 'left' y 'right').",
+        "Respuesta corta": "Incluye 'short_answer' (string con la respuesta esperada).",
+        "Numérico": "Incluye 'numerical_value' (número float).",
+        "Ensayo / Respuesta abierta": "No se requieren campos adicionales más allá de 'consiga'.",
+        "Oración para completar": "Incluye 'oraciones' (lista de strings con huecos marcados con ___).",
+    }
+    field_hint = ""
+    for key, hint in type_field_hints.items():
+        if current_type and key.lower() in current_type.lower():
+            field_hint = f"\nPara el tipo actual: {hint}"
+            break
+
+    # Current item context
+    current_item_json = json.dumps(item, ensure_ascii=False, indent=2)
+
+    return f"""### TAREA:
+Aplica el siguiente ajuste a UN ÚNICO ítem de evaluación existente.
+Modifica SOLO lo que el docente indica. Mantén todo lo demás igual.
+
+### INSTRUCCIÓN DEL DOCENTE:
+{instruction}
+
+### ÍTEM ACTUAL (JSON):
+{current_item_json}
+
+{obj_section}{types_section}
+### REGLAS DE AJUSTE:
+1. Aplica el cambio pedido con precisión pedagógica.
+2. Conserva el tipo de ítem a menos que se pida explícitamente cambiarlo.
+3. Mantén la dificultad y los puntos salvo que se indique lo contrario.
+4. Si el objetivo del ítem cambia, actualiza el campo "objectives" para reflejarlo.
+5. Responde ÚNICAMENTE con el JSON del ítem ajustado, sin texto adicional.{field_hint}
+
+### FORMATO DE RESPUESTA (JSON ÚNICAMENTE, un solo ítem):
+{{
+  "type": "tipo del ítem",
+  "objectives": ["objetivo cubierto"],
+  "consiga": "texto de la consigna/pregunta ajustada",
+  "difficulty": "Fácil|Media|Difícil",
+  "points": 1.0
+  // ...campos específicos del tipo si aplica
+}}

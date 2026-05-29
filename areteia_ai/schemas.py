@@ -91,7 +91,7 @@ class FeedbackClassification(BaseModel):
 class GenerateRequest(BaseModel):
     course_id: int
     course_title: Optional[str] = None
-    step: int
+    step: float
     objective: str = ""
     objective_json: Optional[str] = ""
     summary: str = ""
@@ -107,3 +107,4 @@ class GenerateRequest(BaseModel):
     correction_type: str = ""       # clave_correccion, lista_cotejo, escala_valoracion, rubrica
     correction_label: str = ""       # Human-readable label
     quiz_items_json: str = ""        # JSON of quiz items for context
+    item: Optional[dict] = None      # Single item for step 5.1 adjustment

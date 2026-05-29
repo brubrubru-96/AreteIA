@@ -10,6 +10,7 @@ from schemas import (
     GenerateRequest, 
     SuggestionsResponse, 
     InstrumentDesign, 
+    InstrumentItem,
     RubricDesign,
     CorrectionDesign,
     FeedbackClassification
@@ -365,6 +366,41 @@ async def _prepare_prompt_data(request: GenerateRequest):
                 instrument_id=chosen_id or "",
             )
             schema = InstrumentDesign
+        elif request.step == 5.1:
+            # Single-item adjustment: resolve instrument types, then generate one adjusted item
+            chosen_id = None
+            valid_types = []
+            try:
+                inst_list = get_instrument_list()
+                target_raw = (request.chosen_instrument or "").strip().lower()
+                for inst in inst_list:
+                    if inst.get('id') == request.chosen_instrument or inst.get('name', '').strip().lower() == target_raw:
+                        chosen_id = inst.get('id')
+                        break
+
+                qt_path = os.path.join(os.path.dirname(__file__), "rag/documentos_maestros/tipos_de_preguntas.json")
+                if os.path.exists(qt_path):
+                    with open(qt_path, "r", encoding="utf-8") as f:
+                        valid_types = json.load(f)
+
+                encaje_path = os.path.join(os.path.dirname(__file__), "rag/documentos_maestros/encaje_instrumentos_items.json")
+                if os.path.exists(encaje_path):
+                    with open(encaje_path, "r", encoding="utf-8") as f:
+                        encaje_map = json.load(f)
+                    if chosen_id and chosen_id in encaje_map:
+                        allowed_type_ids = encaje_map[chosen_id]
+                        valid_types = [t for t in valid_types if t.get('id') in allowed_type_ids]
+            except Exception as e:
+                logging.error(f"Error loading question types for step 5.1: {e}")
+
+            from llm import get_adjust_item_prompt
+            prompt = get_adjust_item_prompt(
+                item=request.item or {},
+                instruction=request.feedback,
+                valid_types=valid_types,
+                objective_json=request.objective_json,
+            )
+            schema = InstrumentItem
         elif request.step == 6:
             prompt = get_rubric_prompt(request.instrument_content, request.objective, full_context, request.feedback)
             schema = RubricDesign

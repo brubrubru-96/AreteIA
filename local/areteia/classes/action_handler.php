@@ -78,6 +78,16 @@ class action_handler {
                 self::handle_export_docx($course_id, 'teacher');
                 return true;
 
+            case 'adjust_item':
+                require_sesskey();
+                self::handle_adjust_item($course_id, $base_url, $is_ajax);
+                return true;
+
+            case 'save_item':
+                require_sesskey();
+                self::handle_save_item($course_id, $base_url);
+                return true;
+
             default:
                 return false;
         }
@@ -666,5 +676,104 @@ class action_handler {
         header('Cache-Control: private, max-age=0, must-revalidate');
         echo $docx_content;
         exit;
+    }
+
+    // ------------------------------------------------------------------
+    // Step 5.1 — AI-assisted single-item adjustment
+    // ------------------------------------------------------------------
+
+    /**
+     * Adjust a single item via the Python step-5.1 endpoint.
+     * Reads item_index + feedback from GET params, patches inst_content in session.
+     */
+    private static function handle_adjust_item(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
+        global $PAGE;
+
+        $item_index  = optional_param('item_index', -1, PARAM_INT);
+        $instruction = optional_param('feedback',   '',  PARAM_TEXT);
+        // Strip "[Ítem N] " prefix added by JS
+        $instruction = preg_replace('/^\[Ítem \d+\]\s*/u', '', $instruction);
+
+        $redir = new \moodle_url($base_url, ['step' => 5, 'id' => $course_id]);
+
+        if ($item_index < 0 || trim($instruction) === '') {
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode(['redirect' => $redir->out(false)]);
+                exit;
+            }
+            redirect($redir);
+            return;
+        }
+
+        $raw_content = session_manager::get('inst_content', '');
+        $data = $raw_content ? json_decode($raw_content, true) : null;
+
+        if (!$data || !isset($data['items'][$item_index])) {
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode(['redirect' => $redir->out(false)]);
+                exit;
+            }
+            redirect($redir);
+            return;
+        }
+
+        $res = rag_client::generate([
+            'course_id'          => $course_id,
+            'course_title'       => $PAGE->course->fullname,
+            'step'               => 5.1,
+            'item'               => $data['items'][$item_index],
+            'feedback'           => $instruction,
+            'objective_json'     => session_manager::get('d2_json', ''),
+            'chosen_instrument'  => session_manager::get('instrument', ''),
+        ]);
+
+        if ($res && isset($res->status) && $res->status === 'success' && !empty($res->output)) {
+            // Convert stdClass to assoc array and patch the item
+            $new_item = json_decode(json_encode($res->output), true);
+            if (is_array($new_item)) {
+                $data['items'][$item_index] = $new_item;
+                session_manager::set('inst_content', json_encode($data));
+            }
+        }
+
+        if ($is_ajax) {
+            header('Content-Type: application/json');
+            echo json_encode(['redirect' => $redir->out(false)]);
+            exit;
+        }
+        redirect($redir);
+    }
+
+    /**
+     * Save manually-edited item fields (consiga, difficulty, points) into session.
+     */
+    private static function handle_save_item(int $course_id, \moodle_url $base_url): void {
+        $item_index  = optional_param('item_index',    -1,   PARAM_INT);
+        $new_consiga = optional_param('item_consiga',  '',   PARAM_TEXT);
+        $difficulty  = optional_param('item_difficulty', '', PARAM_TEXT);
+        $points      = optional_param('item_points',   null, PARAM_FLOAT);
+
+        if ($item_index >= 0) {
+            $raw_content = session_manager::get('inst_content', '');
+            $data = $raw_content ? json_decode($raw_content, true) : null;
+
+            if ($data && isset($data['items'][$item_index])) {
+                if (trim($new_consiga) !== '') {
+                    $data['items'][$item_index]['consiga'] = $new_consiga;
+                }
+                $allowed_difficulties = ['Fácil', 'Media', 'Difícil'];
+                if (in_array($difficulty, $allowed_difficulties, true)) {
+                    $data['items'][$item_index]['difficulty'] = $difficulty;
+                }
+                if ($points !== null && $points > 0) {
+                    $data['items'][$item_index]['points'] = $points;
+                }
+                session_manager::set('inst_content', json_encode($data));
+            }
+        }
+
+        redirect(new \moodle_url($base_url, ['step' => 5, 'id' => $course_id]));
     }
 }
