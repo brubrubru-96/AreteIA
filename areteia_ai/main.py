@@ -77,7 +77,63 @@ async def sync_course(request: SyncRequest):
 async def ingest_course(request: Request, background_tasks: BackgroundTasks):
     """
     Trigger ingestion for a course folder in the background.
+    Accepts two modes:
+      1. JSON body with 'base_sync_dir': fast path for shared-filesystem deploys
+         (PHP and Python on the same machine). Files are copied locally, no HTTP upload.
+      2. multipart/form-data with file bytes: fallback for Docker / remote deploys.
     """
+    content_type = request.headers.get("content-type", "")
+
+    # ------------------------------------------------------------------
+    # Fast path: shared filesystem (bare-metal / same-machine deploy)
+    # ------------------------------------------------------------------
+    if "application/json" in content_type:
+        body = await request.json()
+        course_id = body.get("course_id")
+        base_sync_dir = body.get("base_sync_dir", "")
+        selected_files = body.get("selected_files", [])
+
+        if not course_id:
+            return {"status": "error", "message": "course_id is required"}
+
+        # Security: normalize path to block traversal attempts
+        safe_dir = os.path.realpath(base_sync_dir) if base_sync_dir else ""
+        if not safe_dir or not os.path.isdir(safe_dir):
+            return {"status": "path_unavailable", "message": f"Directory not accessible: {base_sync_dir!r}"}
+
+        from rag.store import get_course_dir
+        course_dir = os.path.realpath(get_course_dir(course_id))
+
+        if safe_dir != course_dir:
+            # Different paths on the same machine: local copy (fast, no network overhead)
+            if os.path.exists(course_dir):
+                shutil.rmtree(course_dir)
+            shutil.copytree(safe_dir, course_dir)
+        # else: base_sync_dir IS already the course_dir — nothing to copy.
+
+        INGESTION_PROGRESS[course_id] = {
+            "progress": 0,
+            "message": "Iniciando (path-based)...",
+            "selected_files": selected_files,
+        }
+
+        def progress_callback_path(val, msg):
+            INGESTION_PROGRESS[course_id] = {
+                "progress": val,
+                "message": msg,
+                "selected_files": selected_files,
+            }
+
+        from rag.pipeline import run_ingestion
+        background_tasks.add_task(run_ingestion, course_id, progress_callback=progress_callback_path)
+        return {
+            "status": "started",
+            "message": f"Ingestion triggered (path-based) for course {course_id}",
+        }
+
+    # ------------------------------------------------------------------
+    # Fallback: multipart upload (Docker / remote Python service)
+    # ------------------------------------------------------------------
     form_data = await request.form()
     course_id_str = form_data.get("course_id")
     

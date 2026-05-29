@@ -25,6 +25,7 @@ class action_handler {
     public static function handle(string $action, int $course_id, \moodle_url $base_url, bool $is_ajax): bool {
         switch ($action) {
             case 'sync':
+                require_sesskey();
                 self::handle_sync($course_id, $base_url, $is_ajax);
                 return true; // never reached
 
