@@ -27,7 +27,7 @@ class session_manager {
     private const DIMENSIONS = ['use_moodle', 'path', 'd1', 'd2', 'd2_json', 'd3', 'd4'];
 
     /** Keys cleared when any dimension changes. */
-    private const DOWNSTREAM = ['s_sugs', 'sel_sug', 'instrument', 'inst_content', 'rubric_content'];
+    private const DOWNSTREAM = ['s_sugs', 'sel_sug', 'instrument', 'inst_content', 'rubric_content', 'final_selection_json'];
 
     /** Large-content keys captured separately (PARAM_RAW, non-empty check). */
     private const LARGE_CONTENT = ['s_sugs', 'inst_content', 'rubric_content', 'correction_content'];
@@ -95,6 +95,7 @@ class session_manager {
         ) {
             unset($SESSION->areteia->inst_content);
             unset($SESSION->areteia->rubric_content);
+            unset($SESSION->areteia->final_selection_json);
         }
 
         // --- 5. Persist small URL params → SESSION ---

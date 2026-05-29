@@ -1,0 +1,19 @@
+{
+    // -----------------------------------------------------------------------
+    // Intelephense — Moodle project overrides
+    //
+    // All "undefined function/constant/type" diagnostics are false positives:
+    // Moodle's global API (require_login, optional_param, CAP_ALLOW, etc.)
+    // is loaded at runtime by Moodle's bootstrap, not present in this repo.
+    // PHP syntax is validated separately with `php -l`.
+    // -----------------------------------------------------------------------
+    "intelephense.diagnostics.undefinedFunctions": false,
+    "intelephense.diagnostics.undefinedConstants": false,
+    "intelephense.diagnostics.undefinedTypes": false,
+    "intelephense.diagnostics.undefinedVariables": false,
+
+    // Keep these active — they catch real errors in our own code
+    "intelephense.diagnostics.duplicateFunctions": true,
+    "intelephense.diagnostics.duplicateSymbols": true,
+    "intelephense.diagnostics.implementationErrors": true
+}

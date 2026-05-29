@@ -15,7 +15,7 @@ defined('MOODLE_INTERNAL') || die();
  * @param context_course $context The course context
  */
 function local_areteia_extend_navigation_course(navigation_node $navigation, $course, $context) {
-    if (has_capability('moodle/course:update', $context)) {
+    if (has_capability('local/areteia:use', $context)) {
         $url = new moodle_url('/local/areteia/index.php', ['id' => $course->id]);
         $node = navigation_node::create(
             'AreteIA',

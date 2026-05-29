@@ -1,5 +1,12 @@
 FROM php:8.1-fpm-bookworm
 
+# Proxy support (pass via build args, leave empty if not needed)
+ARG HTTP_PROXY=""
+ARG HTTPS_PROXY=""
+ENV http_proxy=${HTTP_PROXY} \
+    https_proxy=${HTTPS_PROXY} \
+    no_proxy=localhost,127.0.0.1,db
+
 # Environment variables for APT
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -57,8 +64,9 @@ RUN docker-php-ext-install -j$(nproc) \
 RUN docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ && \
     docker-php-ext-install -j$(nproc) gd
 
-# PECL extensions
-RUN pecl install memcached redis apcu igbinary uuid && \
+# PECL extensions (configure proxy for pecl if set)
+RUN if [ -n "${HTTP_PROXY}" ]; then pear config-set http_proxy ${HTTP_PROXY}; fi && \
+    pecl install memcached redis apcu igbinary uuid && \
     docker-php-ext-enable memcached redis apcu igbinary uuid
 
 # Moodle data directories
@@ -73,8 +81,11 @@ RUN git clone --depth 1 --branch ${MOODLE_VERSION} https://github.com/moodle/moo
 
 WORKDIR /var/www/html
 
+# Clear proxy from runtime
+ENV http_proxy="" https_proxy="" no_proxy=""
+
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["php-fpm"]

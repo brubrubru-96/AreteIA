@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
 from typing import Any, List, Optional
 
 class SuggestionItem(BaseModel):
@@ -27,8 +27,21 @@ class InstrumentItem(BaseModel):
     short_answer: Optional[str] = None # For Short Answer
     numerical_value: Optional[float] = None # For Numerical
 
+    @root_validator(pre=True)
+    def normalize_consiga(cls, values):
+        """Accept alternative field names the LLM may use instead of 'consiga'."""
+        if not values.get('consiga'):
+            for alt in ('text', 'tarea', 'pregunta', 'texto', 'question',
+                        'enunciado', 'descripcion', 'descripción', 'instruccion',
+                        'instrucción', 'actividad'):
+                if values.get(alt):
+                    values['consiga'] = values[alt]
+                    break
+        return values
+
 class InstrumentDesign(BaseModel):
     title: str
+    scenario: Optional[str] = None  # Narrative/context for case study, debate, escape room, etc.
     items: List[InstrumentItem]
     justification: str
 
@@ -78,7 +91,7 @@ class FeedbackClassification(BaseModel):
 class GenerateRequest(BaseModel):
     course_id: int
     course_title: Optional[str] = None
-    step: int
+    step: float
     objective: str = ""
     objective_json: Optional[str] = ""
     summary: str = ""
@@ -94,3 +107,4 @@ class GenerateRequest(BaseModel):
     correction_type: str = ""       # clave_correccion, lista_cotejo, escala_valoracion, rubrica
     correction_label: str = ""       # Human-readable label
     quiz_items_json: str = ""        # JSON of quiz items for context
+    item: Optional[dict] = None      # Single item for step 5.1 adjustment

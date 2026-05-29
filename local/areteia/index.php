@@ -25,7 +25,7 @@ $action = optional_param('action', 'lib', PARAM_ALPHANUMEXT);
 $step   = optional_param('step', -1, PARAM_INT); // -1 to detect if not provided
 
 // Allow server-side redirect actions to bypass tab validation
-$server_actions = ['sync', 'ingest', 'export', 'delete_rag', 'preview', 'inject_quiz'];
+$server_actions = ['sync', 'ingest', 'export', 'delete_rag', 'preview', 'inject_quiz', 'inject_assign', 'inject_forum', 'export_pdf', 'export_pdf_teacher', 'export_docx', 'export_docx_teacher', 'adjust_item', 'save_item'];
 if (!isset(\local_areteia\step_renderer::ACTIONS[$action]) && !in_array($action, $server_actions)) {
     $action = 'lib';
 }
@@ -51,6 +51,8 @@ require_once($CFG->dirroot . '/course/lib.php');
 require_once($CFG->libdir . '/questionlib.php');
 
 $context = context_course::instance($id);
+require_capability('local/areteia:use', $context);
+
 $PAGE->set_url(new moodle_url('/local/areteia/index.php', [
     'id'     => $id, 
     'step'   => $step, 

@@ -143,8 +143,25 @@ document.addEventListener("click", e => {
             try {
                 const json = JSON.parse(html);
                 if (json.redirect) {
-                    window.location.href = json.redirect;
-                    return;
+                    // Load the redirect target via AJAX instead of a full page reload.
+                    // This avoids the blank-flash and keeps navigation smooth.
+                    const targetUrl = new URL(json.redirect, window.location.href);
+                    window.history.pushState({}, "", targetUrl.toString());
+                    const ajaxTarget = new URL(targetUrl);
+                    ajaxTarget.searchParams.set("ajax", "1");
+                    return fetch(ajaxTarget).then(r => r.text()).then(redirectHtml => {
+                        document.getElementById("areteia-main").innerHTML = redirectHtml;
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                        initStep3Reactivity();
+                        initGenerativeLoading();
+                        initTreeCheckboxes();
+                        initRagSearchTest();
+                        initIngestionForm();
+                        initPromptPreview();
+                        initItemAdjustmentUI();
+                        initInstrumentFallback();
+                        initQuizWeightsAdjustment();
+                    });
                 }
             } catch (e) {
                 // Not valid JSON, treat as HTML
@@ -508,6 +525,28 @@ function initItemAdjustmentUI() {
         if (tray) {
             tray.classList.toggle("active");
             trigger.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "Ajustar con IA ✨";
+        }
+    });
+
+    // Manual edit trigger toggle
+    document.addEventListener("click", e => {
+        const trigger = e.target.closest(".item-edit-trigger");
+        if (trigger) {
+            const index = trigger.dataset.index;
+            const tray = document.querySelector(`.item-edit-tray[data-index="${index}"]`);
+            if (tray) {
+                tray.classList.toggle("active");
+                trigger.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "✏️ Editar";
+            }
+            return;
+        }
+        const cancel = e.target.closest(".item-edit-cancel");
+        if (cancel) {
+            const index = cancel.dataset.index;
+            const tray = document.querySelector(`.item-edit-tray[data-index="${index}"]`);
+            if (tray) tray.classList.remove("active");
+            const trigger2 = document.querySelector(`.item-edit-trigger[data-index="${index}"]`);
+            if (trigger2) trigger2.innerHTML = "✏️ Editar";
         }
     });
 }
