@@ -227,13 +227,20 @@ class step5 {
                     }
 
                     // --- PER-ITEM ADJUSTMENT UI ---
-                    echo html_writer::start_tag('div', ['style' => 'margin-top:15px; border-top:1px solid #f0f0f0; padding-top:10px;']);
+                    echo html_writer::start_tag('div', ['class' => 'item-action-bar', 'style' => 'margin-top:15px; border-top:1px solid #f0f0f0; padding-top:10px; display:flex; gap:8px; flex-wrap:wrap;']);
                     echo html_writer::tag('button', 'Ajustar con IA ✨', [
                         'type' => 'button',
                         'class' => 'item-adjust-trigger',
                         'data-index' => $index
                     ]);
-                    
+                    echo html_writer::tag('button', '✏️ Editar', [
+                        'type' => 'button',
+                        'class' => 'item-edit-trigger',
+                        'data-index' => $index
+                    ]);
+                    echo html_writer::end_tag('div');
+
+                    // AI adjustment tray
                     echo html_writer::start_tag('div', [
                         'class' => 'item-adjust-tray',
                         'data-index' => $index
@@ -242,7 +249,7 @@ class step5 {
                         'class' => 'item-adjust-textarea',
                         'placeholder' => 'Ej: Hazla más difícil, cambia el enfoque a la praxis...'
                     ]);
-                    $adj_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 5, 'do_gen' => 1]));
+                    $adj_url = new moodle_url($PAGE->url, ['action' => 'adjust_item', 'id' => $id, 'sesskey' => sesskey()]);
                     echo html_writer::link($adj_url, 'Actualizar ítem', [
                         'class' => 'areteia-btn areteia-btn-primary',
                         'style' => 'font-size:11px; padding:4px 12px;',
@@ -250,7 +257,72 @@ class step5 {
                         'data-item-index' => $index
                     ]);
                     echo html_writer::end_tag('div');
+
+                    // Manual edit tray
+                    $current_consiga   = $item['consiga']    ?? '';
+                    $current_diff      = $item['difficulty'] ?? 'Media';
+                    $current_points    = $item['points']     ?? 1;
+                    $save_url = new moodle_url($PAGE->url, ['action' => 'save_item', 'id' => $id]);
+                    echo html_writer::start_tag('div', [
+                        'class' => 'item-edit-tray',
+                        'data-index' => $index
+                    ]);
+                    echo html_writer::start_tag('form', [
+                        'method' => 'post',
+                        'action' => $save_url->out(false),
+                        'style'  => 'margin:0;'
+                    ]);
+                    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey',    'value' => sesskey()]);
+                    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'item_index', 'value' => $index]);
+                    echo html_writer::tag('label', 'Consigna / Pregunta', [
+                        'style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:4px; color:#555;'
+                    ]);
+                    echo html_writer::tag('textarea', s($current_consiga), [
+                        'name'  => 'item_consiga',
+                        'rows'  => 3,
+                        'class' => 'item-adjust-textarea',
+                        'style' => 'margin-bottom:8px;'
+                    ]);
+                    echo html_writer::start_tag('div', ['style' => 'display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;']);
+                    // Difficulty select
+                    echo html_writer::start_tag('div');
+                    echo html_writer::tag('label', 'Dificultad', ['style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:3px; color:#555;']);
+                    echo html_writer::start_tag('select', ['name' => 'item_difficulty', 'style' => 'font-size:12px; border-radius:4px; border:1px solid #ddd; padding:3px 6px;']);
+                    foreach (['Fácil', 'Media', 'Difícil'] as $diff_opt) {
+                        $attrs = ['value' => $diff_opt];
+                        if ($diff_opt === $current_diff) $attrs['selected'] = 'selected';
+                        echo html_writer::tag('option', s($diff_opt), $attrs);
+                    }
+                    echo html_writer::end_tag('select');
                     echo html_writer::end_tag('div');
+                    // Points input
+                    echo html_writer::start_tag('div');
+                    echo html_writer::tag('label', 'Puntos', ['style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:3px; color:#555;']);
+                    echo html_writer::empty_tag('input', [
+                        'type'  => 'number',
+                        'name'  => 'item_points',
+                        'value' => $current_points,
+                        'min'   => '0.5',
+                        'step'  => '0.5',
+                        'style' => 'font-size:12px; border-radius:4px; border:1px solid #ddd; padding:3px 6px; width:70px;'
+                    ]);
+                    echo html_writer::end_tag('div');
+                    // Action buttons
+                    echo html_writer::start_tag('div', ['style' => 'display:flex; gap:6px;']);
+                    echo html_writer::tag('button', 'Guardar', [
+                        'type'  => 'submit',
+                        'style' => 'font-size:11px; padding:4px 12px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer;'
+                    ]);
+                    echo html_writer::tag('button', 'Cancelar', [
+                        'type'        => 'button',
+                        'class'       => 'item-edit-cancel',
+                        'data-index'  => $index,
+                        'style'       => 'font-size:11px; padding:4px 10px; background:none; border:1px solid #bbb; border-radius:4px; cursor:pointer; color:#666;'
+                    ]);
+                    echo html_writer::end_tag('div');
+                    echo html_writer::end_tag('div');
+                    echo html_writer::end_tag('form');
+                    echo html_writer::end_tag('div'); // item-edit-tray
                     
                     echo html_writer::end_tag('div'); // body div
                     echo html_writer::end_tag('div'); // flex container div

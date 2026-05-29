@@ -955,3 +955,34 @@ textarea[name="feedback"]:focus {
     outline: none;
     box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
 }
+
+/* --- Per-item manual edit trigger --- */
+.item-edit-trigger {
+    font-size: 11px;
+    color: #28a745;
+    cursor: pointer;
+    background: none;
+    border: 1px solid #28a745;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    margin-top: 10px;
+}
+
+.item-edit-trigger:hover {
+    background: #28a745;
+    color: #fff;
+}
+
+.item-edit-tray {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+    margin-top: 5px;
+}
+
+.item-edit-tray.active {
+    max-height: 420px;
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+}

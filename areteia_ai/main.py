@@ -10,6 +10,7 @@ from schemas import (
     GenerateRequest, 
     SuggestionsResponse, 
     InstrumentDesign, 
+    InstrumentItem,
     RubricDesign,
     CorrectionDesign,
     FeedbackClassification
@@ -76,7 +77,63 @@ async def sync_course(request: SyncRequest):
 async def ingest_course(request: Request, background_tasks: BackgroundTasks):
     """
     Trigger ingestion for a course folder in the background.
+    Accepts two modes:
+      1. JSON body with 'base_sync_dir': fast path for shared-filesystem deploys
+         (PHP and Python on the same machine). Files are copied locally, no HTTP upload.
+      2. multipart/form-data with file bytes: fallback for Docker / remote deploys.
     """
+    content_type = request.headers.get("content-type", "")
+
+    # ------------------------------------------------------------------
+    # Fast path: shared filesystem (bare-metal / same-machine deploy)
+    # ------------------------------------------------------------------
+    if "application/json" in content_type:
+        body = await request.json()
+        course_id = body.get("course_id")
+        base_sync_dir = body.get("base_sync_dir", "")
+        selected_files = body.get("selected_files", [])
+
+        if not course_id:
+            return {"status": "error", "message": "course_id is required"}
+
+        # Security: normalize path to block traversal attempts
+        safe_dir = os.path.realpath(base_sync_dir) if base_sync_dir else ""
+        if not safe_dir or not os.path.isdir(safe_dir):
+            return {"status": "path_unavailable", "message": f"Directory not accessible: {base_sync_dir!r}"}
+
+        from rag.store import get_course_dir
+        course_dir = os.path.realpath(get_course_dir(course_id))
+
+        if safe_dir != course_dir:
+            # Different paths on the same machine: local copy (fast, no network overhead)
+            if os.path.exists(course_dir):
+                shutil.rmtree(course_dir)
+            shutil.copytree(safe_dir, course_dir)
+        # else: base_sync_dir IS already the course_dir — nothing to copy.
+
+        INGESTION_PROGRESS[course_id] = {
+            "progress": 0,
+            "message": "Iniciando (path-based)...",
+            "selected_files": selected_files,
+        }
+
+        def progress_callback_path(val, msg):
+            INGESTION_PROGRESS[course_id] = {
+                "progress": val,
+                "message": msg,
+                "selected_files": selected_files,
+            }
+
+        from rag.pipeline import run_ingestion
+        background_tasks.add_task(run_ingestion, course_id, progress_callback=progress_callback_path)
+        return {
+            "status": "started",
+            "message": f"Ingestion triggered (path-based) for course {course_id}",
+        }
+
+    # ------------------------------------------------------------------
+    # Fallback: multipart upload (Docker / remote Python service)
+    # ------------------------------------------------------------------
     form_data = await request.form()
     course_id_str = form_data.get("course_id")
     
@@ -365,6 +422,41 @@ async def _prepare_prompt_data(request: GenerateRequest):
                 instrument_id=chosen_id or "",
             )
             schema = InstrumentDesign
+        elif request.step == 5.1:
+            # Single-item adjustment: resolve instrument types, then generate one adjusted item
+            chosen_id = None
+            valid_types = []
+            try:
+                inst_list = get_instrument_list()
+                target_raw = (request.chosen_instrument or "").strip().lower()
+                for inst in inst_list:
+                    if inst.get('id') == request.chosen_instrument or inst.get('name', '').strip().lower() == target_raw:
+                        chosen_id = inst.get('id')
+                        break
+
+                qt_path = os.path.join(os.path.dirname(__file__), "rag/documentos_maestros/tipos_de_preguntas.json")
+                if os.path.exists(qt_path):
+                    with open(qt_path, "r", encoding="utf-8") as f:
+                        valid_types = json.load(f)
+
+                encaje_path = os.path.join(os.path.dirname(__file__), "rag/documentos_maestros/encaje_instrumentos_items.json")
+                if os.path.exists(encaje_path):
+                    with open(encaje_path, "r", encoding="utf-8") as f:
+                        encaje_map = json.load(f)
+                    if chosen_id and chosen_id in encaje_map:
+                        allowed_type_ids = encaje_map[chosen_id]
+                        valid_types = [t for t in valid_types if t.get('id') in allowed_type_ids]
+            except Exception as e:
+                logging.error(f"Error loading question types for step 5.1: {e}")
+
+            from llm import get_adjust_item_prompt
+            prompt = get_adjust_item_prompt(
+                item=request.item or {},
+                instruction=request.feedback,
+                valid_types=valid_types,
+                objective_json=request.objective_json,
+            )
+            schema = InstrumentItem
         elif request.step == 6:
             prompt = get_rubric_prompt(request.instrument_content, request.objective, full_context, request.feedback)
             schema = RubricDesign

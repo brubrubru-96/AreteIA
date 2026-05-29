@@ -546,19 +546,41 @@ class step7 {
             step_renderer::render_nav(7, $prev_url, null);
         }
 
-        // Export download button (always visible)
-        $pdf_url = new moodle_url($PAGE->url, ['action' => 'export_pdf', 'id' => $id]);
+        // Export download buttons (always visible)
+        $pdf_student_url    = new moodle_url($PAGE->url, ['action' => 'export_pdf',          'id' => $id]);
+        $pdf_teacher_url    = new moodle_url($PAGE->url, ['action' => 'export_pdf_teacher',  'id' => $id]);
+        $docx_student_url   = new moodle_url($PAGE->url, ['action' => 'export_docx',         'id' => $id]);
+        $docx_teacher_url   = new moodle_url($PAGE->url, ['action' => 'export_docx_teacher', 'id' => $id]);
+
+        $btn_style_base  = 'display:inline-block; margin:4px; padding:7px 14px; border-radius:6px; '
+                         . 'font-size:12px; text-decoration:none; color:#fff; font-weight:600;';
+        $btn_blue  = $btn_style_base . 'background:#4f6eb0;';
+        $btn_teal  = $btn_style_base . 'background:#2d7d9a;';
+
         echo html_writer::start_tag('div', ['style' => 'text-align:center; margin-top:12px;']);
+        echo '<p style="font-size:12px; color:#666; margin-bottom:6px;">⬇ Descargar instrumento:</p>';
+
         echo html_writer::link(
-            $pdf_url->out(false),
-            '⬇ Exportar consigna (PDF / Word)',
-            [
-                'class'  => 'areteia-btn external',
-                'style'  => 'background:#6c757d; border-color:#6c757d; color:#fff; font-size:12px;',
-                'target' => '_blank',
-                'title'  => 'Descarga el instrumento como archivo imprimible. Abrilo en el navegador e imprimí como PDF, o importalo en Word.',
-            ]
+            $pdf_student_url->out(false),
+            '📄 PDF Estudiante',
+            ['style' => $btn_blue, 'target' => '_blank', 'title' => 'PDF sin respuestas correctas (versión del alumno)']
         );
+        echo html_writer::link(
+            $pdf_teacher_url->out(false),
+            '📄 PDF Docente',
+            ['style' => $btn_teal, 'target' => '_blank', 'title' => 'PDF con respuestas, Bloom y justificación pedagógica']
+        );
+        echo html_writer::link(
+            $docx_student_url->out(false),
+            '📝 Word Estudiante',
+            ['style' => $btn_blue, 'target' => '_blank', 'title' => 'Documento Word sin respuestas correctas (versión del alumno)']
+        );
+        echo html_writer::link(
+            $docx_teacher_url->out(false),
+            '📝 Word Docente',
+            ['style' => $btn_teal, 'target' => '_blank', 'title' => 'Documento Word con respuestas, Bloom y justificación pedagógica']
+        );
+
         echo html_writer::end_tag('div');
 
         // ----------------------------------------------------------------
