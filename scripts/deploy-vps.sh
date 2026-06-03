@@ -1,10 +1,11 @@
 #!/bin/bash
 # Deploy script para VPS bare-metal (sin Docker)
-# Uso: bash /root/areteia/scripts/deploy-vps.sh
+# Uso: bash /root/areteia/scripts/deploy-vps.sh [branch]
+# Ejemplo: bash deploy-vps.sh hotfix/fix-algo
 set -e
 
 REPO_DIR="/root/areteia"
-BRANCH="integracion"
+BRANCH="${1:-main}"
 MOODLE="/home/citepcloud.net.ar/domains/campus.citepcloud.net.ar/public_html"
 PHP="php81"
 FPM_SERVICE="php81-php-fpm"
