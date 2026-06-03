@@ -1,3 +1,17 @@
+# NOTA: En algunos VPS (ej: Avnam/cPanel) el mirror de pip está desactualizado y no
+# tiene fastapi>=0.84. En esos casos usar PyPI oficial explícitamente:
+#   pip install -r requirements.txt --index-url https://pypi.org/simple/
+# En servidores con pip default (instalación limpia) esto no es necesario.
+#
+# Paquetes pesados (~3-5 GB en disco):
+#   - torch + nvidia-*: requerido por sentence-transformers (RAG/embeddings)
+#   - faiss-cpu: índice vectorial para búsqueda semántica
+#   - sentence-transformers: genera embeddings de los documentos subidos
+#
+# Para deploy en VPS sin GPU: estos paquetes corren en CPU, más lento pero funcional.
+# Si el VPS tiene poco disco, considerar reemplazar sentence-transformers por
+# un proveedor de embeddings vía API (ej: OpenAI text-embedding-3-small).
+
 fastapi==0.110.0
 uvicorn==0.29.0
 python-multipart

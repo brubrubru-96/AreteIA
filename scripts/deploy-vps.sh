@@ -1,6 +1,7 @@
 #!/bin/bash
 # Deploy script para VPS bare-metal (sin Docker)
-# Uso: bash /root/areteia/scripts/deploy-vps.sh
+# Uso: bash /root/areteia/scripts/deploy-vps.sh [branch]
+# Ejemplo: bash deploy-vps.sh hotfix/fix-algo
 set -e
 
 REPO_DIR="/root/areteia"
@@ -10,11 +11,28 @@ PHP="php81"
 FPM_SERVICE="php81-php-fpm"
 AI_SERVICE="areteia-ai"
 
+VENV="$REPO_DIR/.venv"
+REQ="$REPO_DIR/areteia_ai/requirements.txt"
+REQ_HASH_FILE="$VENV/.requirements_hash"
+
 echo "--- [1/6] Git pull ---"
 cd "$REPO_DIR"
 git fetch origin
 git checkout "$BRANCH"
 git reset --hard "origin/$BRANCH"
+
+echo "--- [1b/6] Venv Python ---"
+CURRENT_HASH=$(md5sum "$REQ" 2>/dev/null | cut -d' ' -f1)
+SAVED_HASH=$(cat "$REQ_HASH_FILE" 2>/dev/null || echo "")
+if [ ! -f "$VENV/bin/uvicorn" ] || [ "$CURRENT_HASH" != "$SAVED_HASH" ]; then
+    echo "Recreando venv (uvicorn ausente o requirements cambiaron)..."
+    python3.11 -m venv "$VENV" --clear
+    "$VENV/bin/pip" install --upgrade pip
+    "$VENV/bin/pip" install -r "$REQ" --index-url https://pypi.org/simple/
+    echo "$CURRENT_HASH" > "$REQ_HASH_FILE"
+else
+    echo "Venv OK, sin cambios."
+fi
 
 echo "--- [2/6] Copiar plugin PHP a Moodle ---"
 rm -rf "$MOODLE/local/areteia"
