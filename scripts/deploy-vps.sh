@@ -12,7 +12,9 @@ AI_SERVICE="areteia-ai"
 
 echo "--- [1/6] Git pull ---"
 cd "$REPO_DIR"
-git pull origin "$BRANCH"
+git fetch origin
+git checkout "$BRANCH"
+git reset --hard "origin/$BRANCH"
 
 echo "--- [2/6] Copiar plugin PHP a Moodle ---"
 rm -rf "$MOODLE/local/areteia"
