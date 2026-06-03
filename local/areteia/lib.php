@@ -28,6 +28,19 @@ function local_areteia_extend_navigation_course(navigation_node $navigation, $co
         $node->set_show_in_secondary_navigation(true);
         $navigation->add_node($node);
     }
+    if (has_capability('local/areteia:viewreports', context_system::instance())) {
+        $reporturl = new moodle_url('/local/areteia/report.php', ['courseid' => $course->id]);
+        $reportnode = navigation_node::create(
+            'Reportes AreteIA',
+            $reporturl,
+            navigation_node::TYPE_CUSTOM,
+            null,
+            'local_areteia_reports',
+            new pix_icon('i/report', '')
+        );
+        $reportnode->set_show_in_secondary_navigation(true);
+        $navigation->add_node($reportnode);
+    }
 }
 
 /**

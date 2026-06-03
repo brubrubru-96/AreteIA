@@ -17,7 +17,9 @@ REQ_HASH_FILE="$VENV/.requirements_hash"
 
 echo "--- [1/6] Git pull ---"
 cd "$REPO_DIR"
-git pull origin "$BRANCH"
+git fetch origin
+git checkout "$BRANCH"
+git reset --hard "origin/$BRANCH"
 
 echo "--- [1b/6] Venv Python ---"
 CURRENT_HASH=$(md5sum "$REQ" 2>/dev/null | cut -d' ' -f1)

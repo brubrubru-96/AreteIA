@@ -132,6 +132,7 @@ try {
 
     // Inner content
     echo html_writer::start_tag('div', ['class' => 'areteia-inner']);
+    \local_areteia\activity_logger::log($id, 'page_view', ['step' => $step, 'detail' => ['action' => $action]]);
     \local_areteia\step_renderer::render($action, $step, $id, $summary, $files, $context, $is_ajax);
     echo html_writer::end_tag('div'); // areteia-inner
 

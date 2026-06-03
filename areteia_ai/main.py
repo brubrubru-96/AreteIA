@@ -506,16 +506,23 @@ async def generate_endpoint(request: GenerateRequest):
 
         # 5. Parse and Validate JSON
         try:
-            clean_json = re.sub(r'^```json|```$', '', response_text, flags=re.MULTILINE).strip()
-            validated_data = schema.parse_raw(clean_json)
+            # Step 1: strip markdown code fences (```json ... ``` or ``` ... ```)
+            clean = re.sub(r'^```(?:json)?\s*', '', response_text, flags=re.MULTILINE)
+            clean = re.sub(r'\s*```\s*$', '', clean, flags=re.MULTILINE).strip()
+            # Step 2: extract the outermost { ... } block in case the LLM added preamble/postamble
+            start = clean.find('{')
+            end = clean.rfind('}')
+            if start != -1 and end != -1 and end > start:
+                clean = clean[start:end + 1]
+            validated_data = schema.parse_raw(clean)
             return {
                 "status": "success", 
                 "output": validated_data.dict(),
                 "usage": usage
             }
         except Exception as e:
-            logging.exception("Validation failed for LLM output")
-            # If validation fails, we try to return the raw text with a warning or just error
+            logging.error("Validation failed for LLM output. Raw response: %s", response_text[:500])
+            logging.exception("Validation error detail")
             return {
                 "status": "error", 
                 "message": "La IA generó un formato no válido. Por favor, intenta de nuevo o ajusta tu petición.",

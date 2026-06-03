@@ -499,6 +499,12 @@ function initRagSearchTest() {
 // Reload on browser back/forward so state stays in sync
 window.addEventListener("popstate", () => location.reload());
 
+// Fix bfcache flash: when browser restores page from history cache,
+// the DOM might be in an empty/stale state. Force reload immediately.
+window.addEventListener("pageshow", (e) => {
+    if (e.persisted) location.reload();
+});
+
 // Initialize on DOM ready
 document.addEventListener("DOMContentLoaded", () => {
     initStep3Reactivity();

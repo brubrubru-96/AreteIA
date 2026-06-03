@@ -102,20 +102,23 @@ class action_handler {
      * Sync course files to the Python service and redirect to Step 1.
      */
     private static function handle_sync(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
-        // Extract files to sync dir + get summary
-        data_provider::get_course_files($course_id, true);
-        $summary = data_provider::get_course_summary($course_id);
+        activity_logger::timed($course_id, 'sync', function() use ($course_id) {
+            // Extract files to sync dir + get summary
+            data_provider::get_course_files($course_id, true);
+            $summary = data_provider::get_course_summary($course_id);
 
-        // POST /sync
-        rag_client::sync($summary);
+            // POST /sync
+            rag_client::sync($summary);
+        });
 
         // Always return to the Library tab (Step 1)
         $redir = new \moodle_url($base_url, ['step' => 1, 'use_moodle' => 1, 'action' => 'lib']);
         if ($is_ajax) {
             // For AJAX: return JSON with redirect URL, avoid Moodle's redirect() which mutates session
+            // Must clear output buffer BEFORE echoing, otherwise ob_end_clean() discards our JSON.
+            if (ob_get_level() > 0) ob_end_clean();
             header('Content-Type: application/json');
             echo json_encode(['redirect' => $redir->out(false)]);
-            if (ob_get_level() > 0) ob_end_clean();
             exit();
         }
         redirect($redir);
@@ -128,53 +131,64 @@ class action_handler {
         global $CFG;
         \core_php_time_limit::raise(600);
 
-        // 1. Force a clean physical extraction of ALL allowed course files to disk.
-        data_provider::get_course_files($course_id, true);
-
-        // 2. Filter: only keep user-selected files on disk before calling Python.
         $selected_files_raw = optional_param('selected_files', '', PARAM_RAW);
-        error_log("[AreteIA] handle_ingest course={$course_id} selected_files_raw=" . substr($selected_files_raw, 0, 300));
-
-        // Always define base_sync_dir (used below regardless of branch taken)
-        $base_sync_dir = rtrim($CFG->dataroot . '/areteia_sync/course_' . $course_id, '/');
-
+        $selected_files = [];
         if (!empty($selected_files_raw)) {
             $selected_files = json_decode($selected_files_raw, true);
-
-            if (is_array($selected_files) && count($selected_files) > 0) {
-                // Normalize: trim whitespace and unify directory separators
-                $selected_files = array_map(function($p) {
-                    return str_replace('\\', '/', trim($p));
-                }, $selected_files);
-
-                error_log("[AreteIA] Selected files (" . count($selected_files) . "): " . implode(', ', $selected_files));
-
-                if (file_exists($base_sync_dir)) {
-                    $directory = new \RecursiveDirectoryIterator($base_sync_dir, \RecursiveDirectoryIterator::SKIP_DOTS);
-                    $iterator  = new \RecursiveIteratorIterator($directory);
-
-                    foreach ($iterator as $file) {
-                        if ($file->isDir()) continue;
-
-                        // Relative path from course sync dir, normalized to forward slashes
-                        $relative_path = str_replace('\\', '/', substr($file->getPathname(), strlen($base_sync_dir) + 1));
-
-                        if (!in_array($relative_path, $selected_files)) {
-                            error_log("[AreteIA] Deleting unselected: {$relative_path}");
-                            @unlink($file->getPathname());
-                        } else {
-                            error_log("[AreteIA] Keeping selected: {$relative_path}");
-                        }
-                    }
-                }
-            } else {
-                error_log("[AreteIA] WARNING: selected_files JSON decoded to empty/non-array. Raw: " . $selected_files_raw);
-            }
-        } else {
-            error_log("[AreteIA] WARNING: selected_files is empty — ingesting ALL files.");
         }
 
-        $res_data = rag_client::ingest($course_id, $selected_files ?? [], $base_sync_dir);
+        $res_data = activity_logger::timed($course_id, 'ingest', function() use ($course_id, $selected_files_raw, $CFG) {
+            // 1. Force a clean physical extraction of ALL allowed course files to disk.
+            data_provider::get_course_files($course_id, true);
+
+            // 2. Filter: only keep user-selected files on disk before calling Python.
+            error_log("[AreteIA] handle_ingest course={$course_id} selected_files_raw=" . substr($selected_files_raw, 0, 300));
+
+            // Always define base_sync_dir (used below regardless of branch taken)
+            $base_sync_dir = rtrim($CFG->dataroot . '/areteia_sync/course_' . $course_id, '/');
+
+            if (!empty($selected_files_raw)) {
+                $selected_files = json_decode($selected_files_raw, true);
+
+                if (is_array($selected_files) && count($selected_files) > 0) {
+                    // Normalize: trim whitespace and unify directory separators
+                    $selected_files = array_map(function($p) {
+                        return str_replace('\\', '/', trim($p));
+                    }, $selected_files);
+
+                    error_log("[AreteIA] Selected files (" . count($selected_files) . "): " . implode(', ', $selected_files));
+
+                    if (file_exists($base_sync_dir)) {
+                        $directory = new \RecursiveDirectoryIterator($base_sync_dir, \RecursiveDirectoryIterator::SKIP_DOTS);
+                        $iterator  = new \RecursiveIteratorIterator($directory);
+
+                        foreach ($iterator as $file) {
+                            if ($file->isDir()) continue;
+
+                            // Relative path from course sync dir, normalized to forward slashes
+                            $relative_path = str_replace('\\', '/', substr($file->getPathname(), strlen($base_sync_dir) + 1));
+
+                            if (!in_array($relative_path, $selected_files)) {
+                                error_log("[AreteIA] Deleting unselected: {$relative_path}");
+                                @unlink($file->getPathname());
+                            } else {
+                                error_log("[AreteIA] Keeping selected: {$relative_path}");
+                            }
+                        }
+                    }
+                } else {
+                    error_log("[AreteIA] WARNING: selected_files JSON decoded to empty/non-array. Raw: " . $selected_files_raw);
+                }
+            } else {
+                error_log("[AreteIA] WARNING: selected_files is empty — ingesting ALL files.");
+            }
+
+            return rag_client::ingest($course_id, $selected_files ?? [], $base_sync_dir);
+        }, [
+            'detail' => [
+                'files_count' => is_array($selected_files) ? count($selected_files) : 0,
+            ]
+        ]);
 
         // Determine ingestion state: 1=success, 2=empty, 3=processing, -1=error
         if ($res_data && $res_data->status == 'success') {
@@ -201,8 +215,10 @@ class action_handler {
      * Delete the existing RAG embedding for a course.
      */
     private static function handle_delete_rag(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
-        rag_client::delete($course_id);
-        data_provider::delete_sync_dir($course_id);
+        activity_logger::timed($course_id, 'delete_rag', function() use ($course_id) {
+            rag_client::delete($course_id);
+            data_provider::delete_sync_dir($course_id);
+        });
         
         $redir = new \moodle_url($base_url, ['step' => 0, 'action' => 'lib', 'force_step' => 0]);
         if ($is_ajax) {
@@ -230,7 +246,14 @@ class action_handler {
             $final_desc = 'Instrumento generado por AreteIA.';
         }
 
-        $moduleinfo = \local_areteia\data_provider::create_assign_activity($course_id, $inst_name, $final_desc);
+        $instrument = session_manager::get('instrument', '');
+        $moduleinfo = activity_logger::timed($course_id, 'inject_assign', function() use ($course_id, $inst_name, $final_desc) {
+            return \local_areteia\data_provider::create_assign_activity($course_id, $inst_name, $final_desc);
+        }, [
+            'instrument' => $instrument,
+            'instrument_type' => 'assign',
+            'detail' => ['mode' => 'legacy_export']
+        ]);
 
         // Force a valid tab action to avoid infinite redirect loop
         $action = optional_param('action', 'eval', PARAM_ALPHA);
@@ -293,8 +316,19 @@ class action_handler {
         }
 
         try {
-            // Se pasa el max_grade además de name (si se desea uno por defecto se pasa null o string custom)
-            $result = \local_areteia\data_provider::create_quiz_activity($course_id, $section_num, $questions, 'Cuestionario AreteIA', $max_grade);
+            $instrument = session_manager::get('instrument', '');
+            $result = activity_logger::timed($course_id, 'inject_quiz', function() use ($course_id, $section_num, $questions, $max_grade) {
+                // Se pasa el max_grade además de name (si se desea uno por defecto se pasa null o string custom)
+                return \local_areteia\data_provider::create_quiz_activity($course_id, $section_num, $questions, 'Cuestionario AreteIA', $max_grade);
+            }, [
+                'instrument' => $instrument,
+                'instrument_type' => 'quiz',
+                'detail' => [
+                    'section_num' => $section_num,
+                    'questions_count' => count($questions),
+                    'max_grade' => $max_grade
+                ]
+            ]);
             if (!$result || !isset($result['coursemodule'])) {
                 throw new \moodle_exception('error_creating_quiz', 'local_areteia', '', null, 'Result is empty or invalid');
             }
@@ -368,7 +402,16 @@ class action_handler {
         }
 
         try {
-            $moduleinfo = data_provider::create_assign_activity($course_id, $inst_name, $description, $section_num);
+            $instrument = session_manager::get('instrument', '');
+            $moduleinfo = activity_logger::timed($course_id, 'inject_assign', function() use ($course_id, $inst_name, $description, $section_num) {
+                return data_provider::create_assign_activity($course_id, $inst_name, $description, $section_num);
+            }, [
+                'instrument' => $instrument,
+                'instrument_type' => 'assign',
+                'detail' => [
+                    'section_num' => $section_num
+                ]
+            ]);
             $cmid = $moduleinfo->coursemodule;
         } catch (\Throwable $e) {
             error_log('[AreteIA] inject_assign error: ' . $e->getMessage());
@@ -408,7 +451,16 @@ class action_handler {
         }
 
         try {
-            $moduleinfo = data_provider::create_forum_activity($course_id, $inst_name, $description, $section_num);
+            $instrument = session_manager::get('instrument', '');
+            $moduleinfo = activity_logger::timed($course_id, 'inject_forum', function() use ($course_id, $inst_name, $description, $section_num) {
+                return data_provider::create_forum_activity($course_id, $inst_name, $description, $section_num);
+            }, [
+                'instrument' => $instrument,
+                'instrument_type' => 'forum',
+                'detail' => [
+                    'section_num' => $section_num
+                ]
+            ]);
             $cmid = $moduleinfo->coursemodule;
         } catch (\Throwable $e) {
             error_log('[AreteIA] inject_forum error: ' . $e->getMessage());
@@ -597,15 +649,20 @@ class action_handler {
             require_once(__DIR__ . '/pdf_generator.php');
             require_once($tcpdf_path);
             try {
-                if ($version === 'teacher') {
-                    $pdf_content = \local_areteia\pdf_generator::generate_teacher_pdf(
-                        $items, $title, $course_name, $justification, $objectives_data, $scenario
-                    );
-                } else {
-                    $pdf_content = \local_areteia\pdf_generator::generate_student_pdf(
-                        $items, $title, $course_name, $scenario
-                    );
-                }
+                $pdf_content = activity_logger::timed($course_id, 'export_pdf', function() use ($version, $items, $title, $course_name, $justification, $objectives_data, $scenario) {
+                    if ($version === 'teacher') {
+                        return \local_areteia\pdf_generator::generate_teacher_pdf(
+                            $items, $title, $course_name, $justification, $objectives_data, $scenario
+                        );
+                    } else {
+                        return \local_areteia\pdf_generator::generate_student_pdf(
+                            $items, $title, $course_name, $scenario
+                        );
+                    }
+                }, [
+                    'instrument' => $title,
+                    'detail' => ['version' => $version]
+                ]);
                 while (ob_get_level() > 0) { ob_end_clean(); }
                 header('Content-Type: application/pdf');
                 header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -661,15 +718,20 @@ class action_handler {
 
         require_once(__DIR__ . '/docx_generator.php');
 
-        if ($version === 'teacher') {
-            $docx_content = \local_areteia\docx_generator::generate_teacher_docx(
-                $items, $title, $course_name, $justification, $objectives_data, $scenario
-            );
-        } else {
-            $docx_content = \local_areteia\docx_generator::generate_student_docx(
-                $items, $title, $course_name, $scenario
-            );
-        }
+        $docx_content = activity_logger::timed($course_id, 'export_docx', function() use ($version, $items, $title, $course_name, $justification, $objectives_data, $scenario) {
+            if ($version === 'teacher') {
+                return \local_areteia\docx_generator::generate_teacher_docx(
+                    $items, $title, $course_name, $justification, $objectives_data, $scenario
+                );
+            } else {
+                return \local_areteia\docx_generator::generate_student_docx(
+                    $items, $title, $course_name, $scenario
+                );
+            }
+        }, [
+            'instrument' => $title,
+            'detail' => ['version' => $version]
+        ]);
 
         while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -720,14 +782,22 @@ class action_handler {
             return;
         }
 
-        $res = rag_client::generate([
-            'course_id'          => $course_id,
-            'course_title'       => $PAGE->course->fullname,
-            'step'               => 5.1,
-            'item'               => $data['items'][$item_index],
-            'feedback'           => $instruction,
-            'objective_json'     => session_manager::get('d2_json', ''),
-            'chosen_instrument'  => session_manager::get('instrument', ''),
+        $res = activity_logger::timed($course_id, 'adjust_item', function() use ($course_id, $PAGE, $data, $item_index, $instruction) {
+            return rag_client::generate([
+                'course_id'          => $course_id,
+                'course_title'       => $PAGE->course->fullname,
+                'step'               => 5.1,
+                'item'               => $data['items'][$item_index],
+                'feedback'           => $instruction,
+                'objective_json'     => session_manager::get('d2_json', ''),
+                'chosen_instrument'  => session_manager::get('instrument', ''),
+            ]);
+        }, [
+            'instrument' => session_manager::get('instrument', ''),
+            'detail' => [
+                'item_index' => $item_index,
+                'feedback' => $instruction
+            ]
         ]);
 
         if ($res && isset($res->status) && $res->status === 'success' && !empty($res->output)) {
@@ -772,6 +842,15 @@ class action_handler {
                     $data['items'][$item_index]['points'] = $points;
                 }
                 session_manager::set('inst_content', json_encode($data));
+
+                activity_logger::log($course_id, 'save_item', [
+                    'instrument' => session_manager::get('instrument', ''),
+                    'detail' => [
+                        'item_index' => $item_index,
+                        'difficulty' => $difficulty,
+                        'points' => $points,
+                    ]
+                ]);
             }
         }
 

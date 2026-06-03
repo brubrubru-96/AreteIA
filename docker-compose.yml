@@ -1,0 +1,113 @@
+name: areteia
+
+services:
+  db:
+    image: postgres:13-alpine
+    container_name: moodle_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: moodle_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  moodle:
+    build:
+      context: .
+      args:
+        - MOODLE_VERSION=${MOODLE_VERSION}
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+    container_name: moodle_app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - MOODLE_URL=${MOODLE_URL}
+      - DB_TYPE=${DB_TYPE}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_PORT=${DB_PORT}
+      - ARETEIA_AI_URL=${ARETEIA_AI_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./moodledata:/var/www/moodledata
+      - moodle_core:/var/www/html
+      - ./local/areteia:/var/www/html/local/areteia
+      - ./conf/moodle.ini:/usr/local/etc/php/conf.d/moodle.ini
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nginx:
+    image: nginx:alpine
+    container_name: moodle_web
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    volumes:
+      - moodle_core:/var/www/html:ro
+      - ./conf/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - moodle
+
+  python_rag:
+    build:
+      context: ./areteia_ai
+      args:
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+    container_name: python_rag
+    working_dir: /app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - http_proxy=${HTTP_PROXY:-}
+      - https_proxy=${HTTPS_PROXY:-}
+      - no_proxy=localhost,127.0.0.1
+      - HF_TOKEN=${HF_TOKEN:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4.1-mini}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - ARETEIA_SYNC_PATH=${ARETEIA_SYNC_PATH:-/app/data/sync}
+    env_file: .env
+    volumes:
+      - ./areteia_ai:/app:Z
+      - ./data/sync:/app/data/sync:Z
+      - hf_cache:/root/.cache/huggingface
+
+volumes:
+  db_data:
+    external: true
+    name: areteia_db_data
+  redis_data:
+    external: true
+    name: areteia_redis_data
+  moodle_core:
+    external: true
+    name: areteia_moodle_core
+  hf_cache:

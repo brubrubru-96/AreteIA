@@ -53,6 +53,11 @@ class DashScopeProvider(LLMProvider):
 class OpenAIProvider(LLMProvider):
     def __init__(self):
         import openai
+        # Avoid openai SDK crash when base URL is present but empty in the environment.
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if base_url is not None and not base_url.strip():
+            os.environ.pop("OPENAI_BASE_URL", None)
+            
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = os.getenv("OPENAI_MODEL", "gpt-4o")
 

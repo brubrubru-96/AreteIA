@@ -1,5 +1,5 @@
-from pydantic import BaseModel, root_validator
-from typing import Any, List, Optional
+from pydantic import BaseModel, root_validator, validator
+from typing import Any, List, Optional, Union
 
 class SuggestionItem(BaseModel):
     name: str
@@ -15,11 +15,11 @@ class ItemPair(BaseModel):
 
 class InstrumentItem(BaseModel):
     type: str # Must be one of the names in tipos_de_preguntas.json
-    objectives: List[str]
+    objectives: Optional[List[str]] = []  # LLM sometimes omits this
     consiga: str # The main question or text
     alternativas: Optional[List[str]] = None # List of options for Multiple Choice
     oraciones: Optional[List[str]] = None # List of sentences for True/False
-    difficulty: str # e.g., "Fácil", "Media", "Difícil"
+    difficulty: Optional[str] = "Media"  # e.g., "Fácil", "Media", "Difícil"
     points: Optional[float] = None # Estimated points (not final)
     correct_index: Optional[int] = None # For Multiple Choice
     correct_boolean: Optional[bool] = None # For True/False
@@ -39,11 +39,18 @@ class InstrumentItem(BaseModel):
                     break
         return values
 
+    @validator('objectives', pre=True, always=True)
+    def coerce_objectives(cls, v):
+        """If LLM returns objectives as a string instead of a list, wrap it."""
+        if isinstance(v, str):
+            return [v] if v.strip() else []
+        return v or []
+
 class InstrumentDesign(BaseModel):
     title: str
     scenario: Optional[str] = None  # Narrative/context for case study, debate, escape room, etc.
     items: List[InstrumentItem]
-    justification: str
+    justification: Optional[str] = None  # LLM sometimes omits this
 
 class RubricLevel(BaseModel):
     label: str
