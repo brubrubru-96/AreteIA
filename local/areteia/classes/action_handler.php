@@ -115,9 +115,10 @@ class action_handler {
         $redir = new \moodle_url($base_url, ['step' => 1, 'use_moodle' => 1, 'action' => 'lib']);
         if ($is_ajax) {
             // For AJAX: return JSON with redirect URL, avoid Moodle's redirect() which mutates session
+            // Must clear output buffer BEFORE echoing, otherwise ob_end_clean() discards our JSON.
+            if (ob_get_level() > 0) ob_end_clean();
             header('Content-Type: application/json');
             echo json_encode(['redirect' => $redir->out(false)]);
-            if (ob_get_level() > 0) ob_end_clean();
             exit();
         }
         redirect($redir);
