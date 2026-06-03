@@ -27,4 +27,16 @@ $capabilities = [
         ],
     ],
 
+    /*
+     * Allows a user to view the activity reports of AreteIA.
+     */
+    'local/areteia:viewreports' => [
+        'riskbitmask'  => RISK_PERSONAL, // May see other users' actions
+        'captype'      => 'read',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes'   => [
+            'manager' => CAP_ALLOW,
+        ],
+    ],
+
 ];

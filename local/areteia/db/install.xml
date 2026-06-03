@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/areteia/db" VERSION="2026060301" COMMENT="AreteIA activity log table">
+  <TABLES>
+    <TABLE NAME="local_areteia_log" COMMENT="Stores all AreteIA plugin activity events">
+      <FIELDS>
+        <FIELD NAME="id"              TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid"          TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="FK to mdl_user"/>
+        <FIELD NAME="courseid"        TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="FK to mdl_course"/>
+        <FIELD NAME="action"          TYPE="char" LENGTH="50" NOTNULL="true" SEQUENCE="false" COMMENT="Action identifier e.g. sync, ingest, generate_step4"/>
+        <FIELD NAME="step"            TYPE="int" LENGTH="3" NOTNULL="false" SEQUENCE="false" COMMENT="Pipeline step number 0-7"/>
+        <FIELD NAME="instrument"      TYPE="char" LENGTH="255" NOTNULL="false" DEFAULT="" SEQUENCE="false" COMMENT="Selected instrument name"/>
+        <FIELD NAME="instrument_type" TYPE="char" LENGTH="50" NOTNULL="false" DEFAULT="" SEQUENCE="false" COMMENT="Moodle activity type: assign, quiz, forum"/>
+        <FIELD NAME="detail"          TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="JSON blob with action-specific metadata"/>
+        <FIELD NAME="tokens_input"    TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="LLM input tokens consumed"/>
+        <FIELD NAME="tokens_output"   TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="LLM output tokens consumed"/>
+        <FIELD NAME="duration_ms"     TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Action duration in milliseconds"/>
+        <FIELD NAME="status"          TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="ok" SEQUENCE="false" COMMENT="Result: ok, error, timeout"/>
+        <FIELD NAME="timecreated"     TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Unix timestamp"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_course_time" UNIQUE="false" FIELDS="courseid, timecreated"/>
+        <INDEX NAME="idx_user_time"   UNIQUE="false" FIELDS="userid, timecreated"/>
+        <INDEX NAME="idx_action_time" UNIQUE="false" FIELDS="action, timecreated"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

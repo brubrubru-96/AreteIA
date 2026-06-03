@@ -167,8 +167,34 @@ class rag_client {
      * @return object|null
      */
     public static function generate(array $data): ?object {
+        $start = microtime(true);
         $response = self::post('/generate', json_encode($data), 600, 30);
-        return @json_decode($response);
+        $decoded = @json_decode($response);
+        $duration = (int)((microtime(true) - $start) * 1000);
+
+        $courseid = (int)($data['course_id'] ?? 0);
+        $step = $data['step'] ?? null;
+        $status = ($decoded && isset($decoded->status) && $decoded->status === 'success') ? 'ok' : 'error';
+        
+        $tokens_input = isset($decoded->usage->input_tokens) ? (int)$decoded->usage->input_tokens : 0;
+        $tokens_output = isset($decoded->usage->output_tokens) ? (int)$decoded->usage->output_tokens : 0;
+
+        $action_name = 'generate_step' . str_replace('.', '_', (string)$step);
+
+        activity_logger::log($courseid, $action_name, [
+            'step' => (int)$step,
+            'instrument' => $data['chosen_instrument'] ?? '',
+            'tokens_input' => $tokens_input,
+            'tokens_output' => $tokens_output,
+            'duration_ms' => $duration,
+            'status' => $status,
+            'detail' => [
+                'feedback' => $data['feedback'] ?? '',
+                'objective' => $data['objective'] ?? '',
+            ]
+        ]);
+
+        return $decoded;
     }
 
     /**
@@ -178,8 +204,25 @@ class rag_client {
      * @return object|null  { status, system_prompt, user_prompt }
      */
     public static function preview_prompt(array $data): ?object {
+        $start = microtime(true);
         $response = self::post('/preview', json_encode($data), 60, 20);
-        return @json_decode($response);
+        $decoded = @json_decode($response);
+        $duration = (int)((microtime(true) - $start) * 1000);
+
+        $courseid = (int)($data['course_id'] ?? 0);
+        $step = $data['step'] ?? null;
+        $status = ($decoded && isset($decoded->status) && $decoded->status === 'success') ? 'ok' : 'error';
+
+        activity_logger::log($courseid, 'preview', [
+            'step' => (int)$step,
+            'duration_ms' => $duration,
+            'status' => $status,
+            'detail' => [
+                'p_step' => $step
+            ]
+        ]);
+
+        return $decoded;
     }
 
     /**

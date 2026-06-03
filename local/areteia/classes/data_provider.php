@@ -951,7 +951,7 @@ class data_provider {
         $plugin_file_types->plugin = 'file';
         $plugin_file_types->subtype = 'assignsubmission';
         $plugin_file_types->name = 'filetypeslist';
-        $plugin_file_types->value = '*'; // Allow all file types
+        $plugin_file_types->value = ''; // Allow all file types
         $DB->insert_record('assign_plugin_config', $plugin_file_types);
         
         // 4. Add course module
