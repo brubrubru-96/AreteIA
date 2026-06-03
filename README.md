@@ -91,37 +91,94 @@ El sistema garantiza la **alineación constructiva**: las evaluaciones generadas
 
 ---
 
+## Modos de deploy
+
+El sistema soporta tres escenarios de instalación:
+
+| Modo | Cuándo usarlo |
+|------|---------------|
+| **A. Docker all-in-one** | Instalación nueva, dev local, servidor sin Moodle previo |
+| **B. Docker split** | Cuando Moodle y el servicio de IA se gestionan por separado |
+| **C. VPS / bare-metal** | Moodle ya instalado en el servidor; solo el servicio de IA usa Docker |
+
 ## Requisitos
 
+### Para modos A y B (Docker)
 - Docker Engine 20.10+
 - Docker Compose v2
 - 4 GB RAM mínimo
 - 20 GB de disco libre
 
-## Instalación rápida
+### Para modo C (VPS / bare-metal)
+- Moodle operativo (versión 4.5+)
+- Docker Engine (solo para el servicio de IA)
+- Python 3.11+
+- `git` instalado en el servidor
+
+## Instalación
+
+### Opción A: Docker all-in-one
+
+Todo el stack (Moodle + PostgreSQL + Redis + Nginx + servicio de IA) en un único `docker-compose.yml`.
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/fvallad/areteia.git
-cd areteia
+git clone https://github.com/brubrubru-96/AreteIA.git
+cd AreteIA
 
 # 2. Configurar variables de entorno
 cp .env.example .env
 nano .env   # Completar con tus valores
+# Asegurarse de que COMPOSE_FILE=docker-compose.yml esté activo
 
-# 3. Crear volúmenes Docker
+# 3. Crear volúmenes y directorios
 docker volume create areteia_db_data
 docker volume create areteia_redis_data
 docker volume create areteia_moodle_core
-
-# 4. Crear directorios de datos
 mkdir -p moodledata data/sync
 chmod 777 moodledata
 
-# 5. Levantar Moodle
+# 4. Levantar todo
+docker compose up -d --build
+
+# 5. Instalar Moodle (primera vez, esperar ~20 seg a que la DB arranque)
+docker compose exec moodle \
+    php /var/www/html/admin/cli/install_database.php \
+    --lang=en \
+    --adminuser=admin \
+    --adminpass=password \
+    --adminemail=admin@example.com \
+    --fullname="AreteIA Moodle" \
+    --shortname="AreteIA" \
+    --agree-license
+```
+
+---
+
+### Opción B: Docker split (Moodle y servicio de IA por separado)
+
+Útil cuando se quiere gestionar cada componente de forma independiente.
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/brubrubru-96/AreteIA.git
+cd AreteIA
+
+# 2. Configurar variables de entorno
+cp .env.example .env
+nano .env   # Activar: COMPOSE_FILE=docker-compose.moodle.yml:docker-compose.python.yml
+
+# 3. Crear volúmenes y directorios
+docker volume create areteia_db_data
+docker volume create areteia_redis_data
+docker volume create areteia_moodle_core
+mkdir -p moodledata data/sync
+chmod 777 moodledata
+
+# 4. Levantar Moodle
 docker compose -f docker-compose.moodle.yml up -d --build
 
-# 6. Instalar Moodle (primera vez, esperar ~20 seg a que la DB arranque)
+# 5. Instalar Moodle (primera vez, esperar ~20 seg a que la DB arranque)
 docker compose -f docker-compose.moodle.yml exec moodle \
     php /var/www/html/admin/cli/install_database.php \
     --lang=en \
@@ -132,9 +189,43 @@ docker compose -f docker-compose.moodle.yml exec moodle \
     --shortname="AreteIA" \
     --agree-license
 
-# 7. Levantar el servicio de IA
+# 6. Levantar el servicio de IA
 docker compose -f docker-compose.python.yml up -d --build
 ```
+
+---
+
+### Opción C: VPS / bare-metal (Moodle nativo + servicio de IA en Docker)
+
+Para servidores donde Moodle ya está instalado y corriendo de forma nativa. Solo el servicio de IA usa Docker.
+
+**Primer deploy:**
+```bash
+# En el servidor
+git clone https://github.com/brubrubru-96/AreteIA.git /root/areteia
+cd /root/areteia
+cp .env.example .env
+nano .env   # COMPOSE_FILE no es necesario en este modo
+
+# Levantar solo el servicio de IA
+docker compose -f docker-compose.python.yml up -d --build
+
+# Instalar el plugin en Moodle: copiar local/areteia/ al webroot de Moodle
+# y entrar a Administración del sitio → Notificaciones para correr el upgrade
+```
+
+**Actualizaciones (desde el servidor):**
+```bash
+# Deploy de una rama específica (hace git pull, copia plugin, purga caché,
+# reinicia PHP-FPM y el servicio de IA automáticamente)
+bash /root/areteia/scripts/deploy-vps.sh [nombre-de-rama]
+
+# Ejemplo:
+bash /root/areteia/scripts/deploy-vps.sh main
+bash /root/areteia/scripts/deploy-vps.sh feat-metricas
+```
+
+> **Nota**: después de un deploy que incluya cambios en `db/upgrade.php` (nuevas tablas o campos), entrar a **Administración del sitio → Notificaciones** en Moodle para aplicar la migración de base de datos.
 
 ## Configuración
 
@@ -183,10 +274,13 @@ Si Moodle está detrás de un reverse proxy con HTTPS, el `entrypoint.sh` detect
 
 ```
 areteia/
-├── docker-compose.moodle.yml   # Moodle + PostgreSQL + Redis + Nginx
-├── docker-compose.python.yml   # Servicio Python RAG
+├── docker-compose.yml          # Stack unificado (Opción A: all-in-one)
+├── docker-compose.moodle.yml   # Moodle + PostgreSQL + Redis + Nginx (Opción B)
+├── docker-compose.python.yml   # Solo servicio Python RAG (Opción B y C)
 ├── Dockerfile                  # Imagen de Moodle (PHP 8.1 + extensiones)
 ├── entrypoint.sh               # Genera config.php y ajusta permisos
+├── scripts/
+│   └── deploy-vps.sh           # Script de deploy automatizado para VPS (Opción C)
 ├── conf/
 │   ├── nginx.conf              # Configuración de Nginx
 │   └── moodle.ini              # Configuración de PHP
@@ -201,8 +295,10 @@ areteia/
 ├── local/areteia/              # Plugin de Moodle
 │   ├── version.php
 │   ├── index.php
+│   ├── report.php              # Página de reportes de actividad
 │   ├── lib.php
 │   ├── classes/                # Clases PHP del plugin
+│   ├── db/                     # Esquema y migraciones de BD
 │   ├── lang/                   # Traducciones
 │   └── styles.css
 ├── .env.example                # Template de configuración
@@ -506,62 +602,134 @@ Los prompts se configuran en `llm.py` y se estructuran para devolver respuestas 
 
 ## 6. Comandos Útiles y Gestión de Contenedores
 
-Para administrar, levantar y verificar el estado del sistema, utiliza los siguientes comandos dentro de la carpeta del proyecto:
+Para administrar, levantar y verificar el estado del sistema. Los comandos varían según el modo de deploy.
 
-### Levantar y construir el sistema (Modo Background)
+### Opciones A y B (Docker)
+
+#### Levantar y construir
 ```bash
+# Opción A (all-in-one)
+docker compose up -d --build
+
+# Opción B (split)
 docker compose -f docker-compose.moodle.yml up -d --build
 docker compose -f docker-compose.python.yml up -d --build
 ```
 
-### Ver el estado de los contenedores
+#### Ver el estado de los contenedores
 ```bash
+# Opción A
+docker compose ps
+
+# Opción B
 docker compose -f docker-compose.moodle.yml ps
 docker compose -f docker-compose.python.yml ps
 ```
 
-### Logs en tiempo real
+#### Logs en tiempo real
 ```bash
+# Opción A
+docker compose logs -f moodle
+docker compose logs -f python_rag
+
+# Opción B
 docker compose -f docker-compose.moodle.yml logs -f moodle
 docker compose -f docker-compose.python.yml logs -f python_rag
 ```
 
-### Forzar la recreación del contenedor de RAG tras editar variables en `.env`
+#### Forzar recreación del servicio de IA tras editar `.env`
 ```bash
+# Opción A
+docker compose up -d python_rag --force-recreate
+
+# Opción B
 docker compose -f docker-compose.python.yml up -d python_rag --force-recreate
 ```
 
-### Purgar cache de Moodle
+#### Purgar caché de Moodle
 ```bash
+# Opción A
+docker compose exec moodle php admin/cli/purge_caches.php
+
+# Opción B
 docker compose -f docker-compose.moodle.yml exec moodle php admin/cli/purge_caches.php
 ```
 
-### Entrar al contenedor de Moodle
+#### Entrar al contenedor de Moodle
 ```bash
+# Opción A
+docker compose exec moodle bash
+
+# Opción B
 docker compose -f docker-compose.moodle.yml exec moodle bash
 ```
 
-### Entrar a PostgreSQL
+#### Entrar a PostgreSQL
 ```bash
+# Opción A
+docker compose exec db psql -U dbuser -d moodle
+
+# Opción B
 docker compose -f docker-compose.moodle.yml exec db psql -U dbuser -d moodle
 ```
 
-### Reiniciar todo
+#### Reiniciar todo
 ```bash
+# Opción A
+docker compose restart
+
+# Opción B
 docker compose -f docker-compose.moodle.yml restart
 docker compose -f docker-compose.python.yml restart
 ```
 
-### Detener el sistema completo manteniendo los datos persistentes
+#### Detener manteniendo datos
 ```bash
+# Opción A
+docker compose down
+
+# Opción B
 docker compose -f docker-compose.moodle.yml down
 docker compose -f docker-compose.python.yml down
 ```
 
-### Bajar todo Y borrar datos (⚠️ destructivo)
+#### Bajar todo Y borrar datos (⚠️ destructivo)
 ```bash
 docker compose -f docker-compose.moodle.yml down
 docker volume rm areteia_db_data areteia_redis_data areteia_moodle_core
+```
+
+---
+
+### Opción C (VPS / bare-metal)
+
+#### Deploy (actualizar a una rama)
+```bash
+ssh root@tu-servidor -p tu-puerto
+bash /root/areteia/scripts/deploy-vps.sh [rama]
+
+# Ejemplos:
+bash /root/areteia/scripts/deploy-vps.sh main
+bash /root/areteia/scripts/deploy-vps.sh feat-metricas
+```
+
+#### Logs del servicio de IA
+```bash
+# Ver logs en tiempo real (systemd)
+journalctl -u areteia-ai -f
+
+# Ver logs del contenedor Docker
+docker compose -f /root/areteia/docker-compose.python.yml logs -f python_rag
+```
+
+#### Reiniciar solo el servicio de IA
+```bash
+systemctl restart areteia-ai
+```
+
+#### Purgar caché de Moodle manualmente
+```bash
+php /ruta/al/webroot/admin/cli/purge_caches.php
 ```
 
 ---
