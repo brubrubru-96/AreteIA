@@ -298,6 +298,40 @@ class step5 {
                         'class' => 'item-adjust-textarea',
                         'style' => 'margin-bottom:8px;'
                     ]);
+                    // Correct answer editor for closed questions
+                    $is_mc_edit = strpos($type, 'múltiple') !== false || strpos($type, 'selección') !== false || strpos($type, 'cerrada') !== false;
+                    $is_tf_edit = strpos($type, 'verdadero') !== false;
+                    if ($is_mc_edit && !empty($item['alternativas'])) {
+                        echo html_writer::tag('label', 'Opción correcta', ['style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:4px; margin-top:8px; color:#555;']);
+                        echo html_writer::start_tag('div', ['style' => 'margin-bottom:8px;']);
+                        foreach ($item['alternativas'] as $ai => $opt) {
+                            $checked = isset($item['correct_index']) && (int)$item['correct_index'] === $ai;
+                            $attrs = ['type' => 'radio', 'name' => 'item_correct_index', 'value' => $ai];
+                            if ($checked) { $attrs['checked'] = 'checked'; }
+                            echo html_writer::start_tag('label', ['style' => 'display:flex; align-items:center; gap:6px; font-size:12px; margin-bottom:3px; cursor:pointer;']);
+                            echo html_writer::empty_tag('input', $attrs);
+                            echo s($opt);
+                            echo html_writer::end_tag('label');
+                        }
+                        echo html_writer::end_tag('div');
+                    } else if ($is_tf_edit) {
+                        $cb = $item['correct_boolean'] ?? null;
+                        echo html_writer::tag('label', 'Respuesta correcta', ['style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:4px; margin-top:8px; color:#555;']);
+                        echo html_writer::start_tag('div', ['style' => 'display:flex; gap:15px; margin-bottom:8px;']);
+                        $va = ['type' => 'radio', 'name' => 'item_correct_boolean', 'value' => '1'];
+                        if ($cb === true) { $va['checked'] = 'checked'; }
+                        echo html_writer::start_tag('label', ['style' => 'display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;']);
+                        echo html_writer::empty_tag('input', $va);
+                        echo 'Verdadero';
+                        echo html_writer::end_tag('label');
+                        $fa = ['type' => 'radio', 'name' => 'item_correct_boolean', 'value' => '0'];
+                        if ($cb === false) { $fa['checked'] = 'checked'; }
+                        echo html_writer::start_tag('label', ['style' => 'display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;']);
+                        echo html_writer::empty_tag('input', $fa);
+                        echo 'Falso';
+                        echo html_writer::end_tag('label');
+                        echo html_writer::end_tag('div');
+                    }
                     echo html_writer::start_tag('div', ['style' => 'display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;']);
                     // Difficulty select
                     echo html_writer::start_tag('div');

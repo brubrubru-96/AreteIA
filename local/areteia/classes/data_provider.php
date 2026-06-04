@@ -1051,6 +1051,7 @@ class data_provider {
         $cm->instance = $forum->id;
         $cm->section = $sectionid;
         $cm->id = add_course_module($cm);
+        \context_module::instance($cm->id); // Create module context (required for Moodle 4.x lookups)
 
         // 3. Add cm to section
         course_add_cm_to_section($courseid, $cm->id, $sectionnum);

@@ -378,4 +378,144 @@ class pdf_generator {
 
         return $rendered;
     }
+
+    /**
+     * Generate a teacher-facing PDF for the correction instrument (apoyo a la calificación).
+     *
+     * @param string $correction_type  One of: clave_correccion, lista_cotejo, escala_valoracion, rubrica
+     * @param array  $data             Decoded correction_content from session
+     * @param string $instrument       Instrument name (e.g. "Prueba Mixta")
+     * @param string $course_name      Course name
+     * @return string PDF binary
+     */
+    public static function generate_correction_pdf(string $correction_type, array $data, string $instrument, string $course_name): string {
+        global $CFG;
+        require_once($CFG->libdir . '/tcpdf/tcpdf.php');
+
+        $labels = [
+            'clave_correccion'  => 'Clave de Corrección',
+            'lista_cotejo'      => 'Lista de Cotejo',
+            'escala_valoracion' => 'Escala de Valoración',
+            'rubrica'           => 'Rúbrica',
+        ];
+        $label = $labels[$correction_type] ?? $correction_type;
+        $title = $data['title'] ?? ($label . ' — ' . $instrument);
+
+        $pdf = new \TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetCreator('AreteIA');
+        $pdf->SetAuthor('AreteIA');
+        $pdf->SetTitle($title);
+        $pdf->SetSubject('Apoyo a la Calificación');
+        $margin = 25;
+        $pdf->SetMargins($margin, $margin, $margin);
+        $pdf->SetTopMargin($margin);
+        $pdf->SetAutoPageBreak(true, $margin);
+        $pdf->SetHeaderMargin(0);
+        $pdf->SetFooterMargin(0);
+        $pdf->AddPage();
+        $pdf->SetY($margin);
+
+        $pagewidth = $pdf->getPageWidth() - $pdf->getMargins()['left'] - $pdf->getMargins()['right'];
+        $pdf->SetFont('helvetica', 'B', 14);
+        $pdf->MultiCell($pagewidth, 7, $title, 0, 'C', false, 1);
+        $pdf->SetFont('helvetica', '', 10);
+        $pdf->MultiCell($pagewidth, 5, $label . ' — ' . $instrument, 0, 'C', false, 1);
+        $pdf->Ln(6);
+
+        $esc  = fn(string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $hs   = 'background-color:#6c63ff;color:#ffffff;font-weight:bold;font-size:9pt;padding:4px;';
+        $td   = 'font-size:9pt;padding:4px;border:1px solid #cccccc;';
+        $tda  = 'font-size:9pt;padding:4px;border:1px solid #cccccc;background-color:#f9f9f9;';
+
+        $html = '<table border="1" cellpadding="3" cellspacing="0" style="width:100%;">';
+
+        switch ($correction_type) {
+            case 'clave_correccion':
+                $html .= "<tr><th style=\"{$hs}width:60%;\">Pregunta / Ítem</th><th style=\"{$hs}\">Respuesta correcta</th></tr>";
+                foreach (($data['items'] ?? []) as $i => $item) {
+                    $item = (array)$item;
+                    $q    = $esc($item['question'] ?? $item['pregunta'] ?? '');
+                    $mas  = $item['model_answers'] ?? null;
+                    if (is_array($mas) && !empty($mas)) {
+                        $ans = 'Respuesta abierta: ' . $esc(implode(' / ', array_map('strval', $mas)));
+                    } else {
+                        $ans = $esc((string)($item['answer'] ?? $item['respuesta'] ?? ''));
+                    }
+                    $s = ($i % 2 === 1) ? $tda : $td;
+                    $html .= "<tr><td style=\"{$s}\">{$q}</td><td style=\"{$s}\">{$ans}</td></tr>";
+                }
+                break;
+
+            case 'lista_cotejo':
+                $html .= "<tr><th style=\"{$hs}width:70%;\">Criterio</th><th style=\"{$hs}\">Logrado</th><th style=\"{$hs}\">No logrado</th></tr>";
+                foreach (($data['criteria'] ?? $data['criterios'] ?? []) as $i => $item) {
+                    $item = (array)$item;
+                    $c    = $esc($item['criterion'] ?? $item['criterio'] ?? '');
+                    $s    = ($i % 2 === 1) ? $tda : $td;
+                    $html .= "<tr><td style=\"{$s}\">{$c}</td><td style=\"{$s}\" align=\"center\">&#9744;</td><td style=\"{$s}\" align=\"center\">&#9744;</td></tr>";
+                }
+                break;
+
+            case 'escala_valoracion':
+                $items  = $data['criteria'] ?? $data['criterios'] ?? [];
+                $levels = $data['levels'] ?? $data['niveles'] ?? ['Insuficiente', 'Suficiente', 'Bueno', 'Destacado'];
+                $html  .= "<tr><th style=\"{$hs}\">Criterio</th>";
+                foreach ($levels as $lv) { $html .= "<th style=\"{$hs}\">" . $esc((string)$lv) . '</th>'; }
+                $html  .= '</tr>';
+                foreach ($items as $i => $item) {
+                    $item  = (array)$item;
+                    $c     = $esc($item['criterion'] ?? $item['criterio'] ?? '');
+                    $s     = ($i % 2 === 1) ? $tda : $td;
+                    $html .= "<tr><td style=\"{$s}\">{$c}</td>";
+                    foreach ($levels as $lv) { $html .= "<td style=\"{$s}\" align=\"center\">&#9675;</td>"; }
+                    $html .= '</tr>';
+                }
+                break;
+
+            case 'rubrica':
+                $criteria = $data['rubric_criteria'] ?? $data['criteria'] ?? [];
+                $first    = reset($criteria);
+                $levels   = [];
+                if (is_array($first) && !empty($first['levels'])) {
+                    foreach ($first['levels'] as $lvl) { $levels[] = $lvl['label'] ?? '—'; }
+                } else {
+                    $levels = $data['levels'] ?? ['Insuficiente', 'Suficiente', 'Bueno', 'Destacado'];
+                }
+                $html .= "<tr><th style=\"{$hs}width:22%;\">Criterio</th>";
+                foreach ($levels as $lv) { $html .= "<th style=\"{$hs}\">" . $esc((string)$lv) . '</th>'; }
+                $html .= '</tr>';
+                foreach ($criteria as $i => $crit) {
+                    $crit  = (array)$crit;
+                    $cname = $esc($crit['name'] ?? $crit['criterion'] ?? '');
+                    if (isset($crit['weight'])) { $cname .= ' (' . (int)$crit['weight'] . '%)'; }
+                    $s     = ($i % 2 === 1) ? $tda : $td;
+                    $html .= "<tr><td style=\"{$s}\"><b>{$cname}</b></td>";
+                    foreach (($crit['levels'] ?? []) as $lvl) {
+                        $lvl  = (array)$lvl;
+                        $desc = $esc($lvl['description'] ?? '');
+                        if (isset($lvl['score'])) { $desc .= ' <i>(' . $esc((string)$lvl['score']) . ')</i>'; }
+                        $html .= "<td style=\"{$s}\">{$desc}</td>";
+                    }
+                    $missing = count($levels) - count($crit['levels'] ?? []);
+                    for ($j = 0; $j < $missing; $j++) { $html .= "<td style=\"{$s}\">—</td>"; }
+                    $html .= '</tr>';
+                }
+                break;
+        }
+        $html .= '</table>';
+
+        $pdf->writeHTML($html, true, false, true, false, '');
+
+        if (!empty($data['justification'])) {
+            $pdf->Ln(6);
+            $pdf->SetFont('helvetica', 'B', 9);
+            $pdf->Cell(0, 5, 'Justificación pedagógica:', 0, 1);
+            $pdf->SetFont('helvetica', 'I', 9);
+            $pdf->MultiCell(0, 5, $data['justification'], 0, 'L');
+        }
+
+        return $pdf->Output('', 'S');
+    }
 }

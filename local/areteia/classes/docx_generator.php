@@ -366,4 +366,105 @@ class docx_generator {
     private static function escape_xml(string $text): string {
         return htmlspecialchars($text, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     }
+
+    /**
+     * Generate a teacher-facing DOCX for the correction instrument (apoyo a la calificación).
+     *
+     * @param string $correction_type  One of: clave_correccion, lista_cotejo, escala_valoracion, rubrica
+     * @param array  $data             Decoded correction_content from session
+     * @param string $instrument       Instrument name
+     * @param string $course_name      Course name
+     * @return string DOCX binary
+     */
+    public static function generate_correction_docx(string $correction_type, array $data, string $instrument, string $course_name): string {
+        $labels = [
+            'clave_correccion'  => 'Clave de Corrección',
+            'lista_cotejo'      => 'Lista de Cotejo',
+            'escala_valoracion' => 'Escala de Valoración',
+            'rubrica'           => 'Rúbrica',
+        ];
+        $label = $labels[$correction_type] ?? $correction_type;
+        $title = $data['title'] ?? ($label . ' — ' . $instrument);
+
+        $paragraphs   = [];
+        $paragraphs[] = ['text' => $title, 'bold' => true];
+        $paragraphs[] = ['text' => $label . ' · ' . $instrument];
+        $paragraphs[] = ['text' => ''];
+
+        switch ($correction_type) {
+            case 'clave_correccion':
+                $rows = [];
+                foreach (($data['items'] ?? []) as $item) {
+                    $item = (array)$item;
+                    $q    = $item['question'] ?? $item['pregunta'] ?? '';
+                    $mas  = $item['model_answers'] ?? null;
+                    if (is_array($mas) && !empty($mas)) {
+                        $ans = 'Respuesta abierta: ' . implode(' / ', array_map('strval', $mas));
+                    } else {
+                        $ans = (string)($item['answer'] ?? $item['respuesta'] ?? '');
+                    }
+                    $rows[] = [$q, $ans];
+                }
+                $paragraphs[] = ['table' => ['headers' => ['Pregunta / Ítem', 'Respuesta correcta'], 'rows' => $rows]];
+                break;
+
+            case 'lista_cotejo':
+                $rows = [];
+                foreach (($data['criteria'] ?? $data['criterios'] ?? []) as $item) {
+                    $item   = (array)$item;
+                    $rows[] = [$item['criterion'] ?? $item['criterio'] ?? '', '☐ Logrado', '☐ No logrado'];
+                }
+                $paragraphs[] = ['table' => ['headers' => ['Criterio', 'Logrado', 'No logrado'], 'rows' => $rows]];
+                break;
+
+            case 'escala_valoracion':
+                $items  = $data['criteria'] ?? $data['criterios'] ?? [];
+                $levels = $data['levels'] ?? $data['niveles'] ?? ['Insuficiente', 'Suficiente', 'Bueno', 'Destacado'];
+                $rows   = [];
+                foreach ($items as $item) {
+                    $item  = (array)$item;
+                    $row   = [$item['criterion'] ?? $item['criterio'] ?? ''];
+                    foreach ($levels as $lv) { $row[] = '○'; }
+                    $rows[] = $row;
+                }
+                $paragraphs[] = ['table' => ['headers' => array_merge(['Criterio'], $levels), 'rows' => $rows]];
+                break;
+
+            case 'rubrica':
+                $criteria = $data['rubric_criteria'] ?? $data['criteria'] ?? [];
+                $first    = reset($criteria);
+                $levels   = [];
+                if (is_array($first) && !empty($first['levels'])) {
+                    foreach ($first['levels'] as $lvl) { $levels[] = $lvl['label'] ?? '—'; }
+                } else {
+                    $levels = $data['levels'] ?? ['Insuficiente', 'Suficiente', 'Bueno', 'Destacado'];
+                }
+                $rows = [];
+                foreach ($criteria as $crit) {
+                    $crit  = (array)$crit;
+                    $cname = $crit['name'] ?? $crit['criterion'] ?? '';
+                    if (isset($crit['weight'])) { $cname .= ' (' . $crit['weight'] . '%)'; }
+                    $row   = [$cname];
+                    foreach (($crit['levels'] ?? []) as $lvl) {
+                        $lvl  = (array)$lvl;
+                        $desc = $lvl['description'] ?? '';
+                        if (isset($lvl['score'])) { $desc .= ' (' . $lvl['score'] . ' pts)'; }
+                        $row[] = $desc;
+                    }
+                    $missing = count($levels) - (count($row) - 1);
+                    for ($i = 0; $i < $missing; $i++) { $row[] = '—'; }
+                    $rows[] = $row;
+                }
+                $paragraphs[] = ['table' => ['headers' => array_merge(['Criterio'], $levels), 'rows' => $rows]];
+                break;
+        }
+
+        $paragraphs[] = ['text' => ''];
+        if (!empty($data['justification'])) {
+            $paragraphs[] = ['text' => 'Justificación pedagógica:', 'bold' => true];
+            $paragraphs[] = ['text' => $data['justification']];
+        }
+
+        return self::build_docx($paragraphs);
+    }
 }

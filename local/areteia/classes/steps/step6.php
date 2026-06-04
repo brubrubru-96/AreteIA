@@ -244,6 +244,16 @@ class step6 {
             'style' => 'font-size:12px; margin-bottom:20px; display:inline-block;'
         ]);
 
+        // Download buttons for correction instrument (mirrors instrument PDF/DOCX buttons)
+        $pdf_url  = new moodle_url('/local/areteia/index.php', ['action' => 'export_correction_pdf',  'id' => $id]);
+        $docx_url = new moodle_url('/local/areteia/index.php', ['action' => 'export_correction_docx', 'id' => $id]);
+        $btn = 'display:inline-block; margin:4px; padding:7px 14px; border-radius:6px; font-size:12px; text-decoration:none; color:#fff; font-weight:600;';
+        echo html_writer::start_tag('div', ['style' => 'text-align:center; margin:15px 0 5px 0;']);
+        echo html_writer::tag('p', 'Descargar apoyo a la calificación:', ['style' => 'font-size:11px; color:#666; margin-bottom:8px;']);
+        echo html_writer::link($pdf_url,  '⬇ PDF',  ['style' => $btn . 'background:#4f6eb0;', 'title' => 'Descargar como PDF']);
+        echo html_writer::link($docx_url, '⬇ Word', ['style' => $btn . 'background:#2d7d9a;', 'title' => 'Descargar como Word (.docx)']);
+        echo html_writer::end_tag('div');
+
         // Navigation
         $next_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 7]));
         step_renderer::render_nav(6, null, $next_url, 'Ver resultado final →');

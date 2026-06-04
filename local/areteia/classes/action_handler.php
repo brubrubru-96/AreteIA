@@ -89,6 +89,14 @@ class action_handler {
                 self::handle_save_item($course_id, $base_url);
                 return true;
 
+            case 'export_correction_pdf':
+                self::handle_export_correction_pdf($course_id);
+                return true;
+
+            case 'export_correction_docx':
+                self::handle_export_correction_docx($course_id);
+                return true;
+
             default:
                 return false;
         }
@@ -821,10 +829,12 @@ class action_handler {
      * Save manually-edited item fields (consiga, difficulty, points) into session.
      */
     private static function handle_save_item(int $course_id, \moodle_url $base_url): void {
-        $item_index  = optional_param('item_index',    -1,   PARAM_INT);
-        $new_consiga = optional_param('item_consiga',  '',   PARAM_TEXT);
-        $difficulty  = optional_param('item_difficulty', '', PARAM_TEXT);
-        $points      = optional_param('item_points',   null, PARAM_FLOAT);
+        $item_index      = optional_param('item_index',           -1,   PARAM_INT);
+        $new_consiga     = optional_param('item_consiga',         '',   PARAM_TEXT);
+        $difficulty      = optional_param('item_difficulty',      '',   PARAM_TEXT);
+        $points          = optional_param('item_points',          null, PARAM_FLOAT);
+        $correct_index   = optional_param('item_correct_index',   null, PARAM_INT);
+        $correct_boolean = optional_param('item_correct_boolean', null, PARAM_TEXT);
 
         if ($item_index >= 0) {
             $raw_content = session_manager::get('inst_content', '');
@@ -841,6 +851,12 @@ class action_handler {
                 if ($points !== null && $points > 0) {
                     $data['items'][$item_index]['points'] = $points;
                 }
+                if ($correct_index !== null && $correct_index >= 0) {
+                    $data['items'][$item_index]['correct_index'] = (int)$correct_index;
+                }
+                if ($correct_boolean === '1' || $correct_boolean === '0') {
+                    $data['items'][$item_index]['correct_boolean'] = ($correct_boolean === '1');
+                }
                 session_manager::set('inst_content', json_encode($data));
 
                 activity_logger::log($course_id, 'save_item', [
@@ -855,5 +871,113 @@ class action_handler {
         }
 
         redirect(new \moodle_url($base_url, ['step' => 5, 'id' => $course_id]));
+    }
+
+    /**
+     * Export the correction instrument (apoyo a la calificación) as a PDF download.
+     * Falls back to HTML if TCPDF is unavailable.
+     */
+    private static function handle_export_correction_pdf(int $course_id): void {
+        global $CFG, $PAGE;
+
+        $redir = new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'action' => 'crit', 'step' => 6]);
+
+        $correction         = session_manager::get('correction_instrument', '');
+        $correction_content = session_manager::get('correction_content', '');
+        $instrument         = session_manager::get('instrument', '');
+
+        if (empty($correction_content)) { redirect($redir); }
+        $data = json_decode($correction_content, true);
+        if (!is_array($data)) { redirect($redir); }
+
+        $labels = [
+            'clave_correccion'  => 'Clave de Corrección',
+            'lista_cotejo'      => 'Lista de Cotejo',
+            'escala_valoracion' => 'Escala de Valoración',
+            'rubrica'           => 'Rúbrica',
+        ];
+        $label    = $labels[$correction] ?? $correction;
+        $course_name = $PAGE->course->fullname ?? '';
+        $filename = \clean_filename($label . ' - ' . $instrument) . '.pdf';
+
+        $tcpdf_path = $CFG->libdir . '/tcpdf/tcpdf.php';
+        if (!file_exists($tcpdf_path)) {
+            $tcpdf_path = $CFG->libdir . '/pdflib.php';
+        }
+
+        if (file_exists($tcpdf_path)) {
+            require_once(__DIR__ . '/pdf_generator.php');
+            require_once($tcpdf_path);
+            try {
+                $pdf_content = \local_areteia\pdf_generator::generate_correction_pdf(
+                    $correction, $data, $instrument, $course_name
+                );
+                while (ob_get_level() > 0) { ob_end_clean(); }
+                header('Content-Type: application/pdf');
+                header('Content-Disposition: attachment; filename="' . $filename . '"');
+                header('Cache-Control: private, max-age=0, must-revalidate');
+                echo $pdf_content;
+                exit;
+            } catch (\Throwable $e) {
+                // Fall through to HTML fallback
+            }
+        }
+
+        // HTML fallback (printable)
+        $title_safe = htmlspecialchars($data['title'] ?? ($label . ' — ' . $instrument), ENT_QUOTES, 'UTF-8');
+        $safe       = preg_replace('/[^a-zA-Z0-9_-]/', '_', $label . '_' . $instrument);
+        $h  = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>' . $title_safe . '</title>';
+        $h .= '<style>body{font-family:Arial,sans-serif;font-size:12pt;max-width:900px;margin:0 auto;padding:30px;}';
+        $h .= 'h1{font-size:16pt;border-bottom:3px solid #6c63ff;padding-bottom:8px;color:#2d2d6d;}';
+        $h .= 'table{width:100%;border-collapse:collapse;}th{background:#6c63ff;color:#fff;padding:8px;text-align:left;}';
+        $h .= 'td{padding:7px 9px;border:1px solid #ddd;font-size:10pt;vertical-align:top;}';
+        $h .= 'tr:nth-child(even){background:#f9f9f9;}</style></head><body>';
+        $h .= '<h1>' . $title_safe . '</h1>';
+        // Minimal fallback: just dump JSON as a table
+        $h .= '<pre style="font-size:9pt;">' . htmlspecialchars(json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') . '</pre>';
+        $h .= '</body></html>';
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: text/html; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="AreteIA_' . $safe . '.html"');
+        echo $h;
+        exit;
+    }
+
+    /**
+     * Export the correction instrument (apoyo a la calificación) as a DOCX download.
+     */
+    private static function handle_export_correction_docx(int $course_id): void {
+        global $PAGE;
+
+        $redir = new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'action' => 'crit', 'step' => 6]);
+
+        $correction         = session_manager::get('correction_instrument', '');
+        $correction_content = session_manager::get('correction_content', '');
+        $instrument         = session_manager::get('instrument', '');
+
+        if (empty($correction_content)) { redirect($redir); }
+        $data = json_decode($correction_content, true);
+        if (!is_array($data)) { redirect($redir); }
+
+        $labels = [
+            'clave_correccion'  => 'Clave de Corrección',
+            'lista_cotejo'      => 'Lista de Cotejo',
+            'escala_valoracion' => 'Escala de Valoración',
+            'rubrica'           => 'Rúbrica',
+        ];
+        $label    = $labels[$correction] ?? $correction;
+        $course_name = $PAGE->course->fullname ?? '';
+        $filename = \clean_filename($label . ' - ' . $instrument) . '.docx';
+
+        require_once(__DIR__ . '/docx_generator.php');
+        $docx_content = \local_areteia\docx_generator::generate_correction_docx(
+            $correction, $data, $instrument, $course_name
+        );
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        echo $docx_content;
+        exit;
     }
 }

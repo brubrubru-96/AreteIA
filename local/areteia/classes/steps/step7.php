@@ -540,10 +540,11 @@ class step7 {
         $prev_url   = new moodle_url($PAGE->url, ['step' => 6]); // Now goes back to 5 due to sequence update
         $export_url = new moodle_url($PAGE->url, ['action' => 'export', 'sesskey' => sesskey()]);
 
+        $crit_url = new moodle_url($PAGE->url, ['action' => 'crit', 'step' => 6, 'id' => $id]);
         if ($any_published) {
-            step_renderer::render_nav(7, $prev_url, null, '', [], '✔ Publicado con éxito');
+            step_renderer::render_nav(7, $prev_url, $crit_url, 'Crear apoyo a la calificación →');
         } else {
-            step_renderer::render_nav(7, $prev_url, null);
+            step_renderer::render_nav(7, $prev_url, $crit_url, 'Crear apoyo a la calificación →');
         }
 
         // Export download buttons (always visible)
