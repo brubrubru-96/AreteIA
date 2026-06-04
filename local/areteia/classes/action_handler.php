@@ -541,10 +541,12 @@ class action_handler {
                 $parts[] = ''; // spacer
             }
 
+            /* Justificación Pedagógica - temporalmente oculta
             if (!empty($data['justification'])) {
                 $parts[] = '---';
                 $parts[] = '**Justificación Pedagógica:** ' . $data['justification'];
             }
+            */
         } else {
             // Fallback: use raw content as-is
             $parts[] = $inst_content ?: 'Instrumento generado por AreteIA.';
@@ -699,9 +701,11 @@ class action_handler {
             $h .= '<li>' . nl2br(htmlspecialchars($item['text'] ?? $item['consiga'] ?? '', ENT_QUOTES, 'UTF-8')) . '</li>';
         }
         $h .= '</ol>';
+        /* Justificación Pedagógica en HTML fallback - temporalmente oculta
         if ($version === 'teacher' && !empty($justification)) {
             $h .= '<hr><p><em>' . htmlspecialchars($justification, ENT_QUOTES, 'UTF-8') . '</em></p>';
         }
+        */
         $h .= '</body></html>';
 
         while (ob_get_level() > 0) { ob_end_clean(); }

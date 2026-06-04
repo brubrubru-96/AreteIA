@@ -243,11 +243,13 @@ class step5 {
 
                     // --- PER-ITEM ADJUSTMENT UI ---
                     echo html_writer::start_tag('div', ['class' => 'item-action-bar', 'style' => 'margin-top:15px; border-top:1px solid #f0f0f0; padding-top:10px; display:flex; gap:8px; flex-wrap:wrap;']);
+                    /* Ajustar con IA - temporalmente oculto
                     echo html_writer::tag('button', 'Ajustar con IA ✨', [
                         'type' => 'button',
                         'class' => 'item-adjust-trigger',
                         'data-index' => $index
                     ]);
+                    */
                     echo html_writer::tag('button', '✏️ Editar', [
                         'type' => 'button',
                         'class' => 'item-edit-trigger',
@@ -255,7 +257,7 @@ class step5 {
                     ]);
                     echo html_writer::end_tag('div');
 
-                    // AI adjustment tray
+                    /* AI adjustment tray - temporalmente oculto
                     echo html_writer::start_tag('div', [
                         'class' => 'item-adjust-tray',
                         'data-index' => $index
@@ -272,6 +274,7 @@ class step5 {
                         'data-item-index' => $index
                     ]);
                     echo html_writer::end_tag('div');
+                    */
 
                     // Manual edit tray
                     $current_consiga   = $item['consiga']    ?? '';
@@ -379,13 +382,14 @@ class step5 {
                 } // End items loop
                 echo html_writer::end_tag('div'); // areteia-inner div wrapper (items container)
 
-                // Justification
+                /* Justificación Pedagógica - temporalmente oculta
                 if (!empty($data['justification'])) {
                     echo html_writer::start_tag('div', ['style' => 'font-size:12px; color:#666; font-style:italic; padding:15px; background:#f9f9f9; border-radius:10px; margin-bottom:20px; border:1px solid #eee;']);
                     echo html_writer::tag('strong', '💡 Justificación Pedagógica: ', ['style' => 'color:#185fa5;']);
                     echo s($data['justification']);
                     echo html_writer::end_tag('div');
                 }
+                */
                 
                 // Securely store the source data for PHP processing in Step 7
                 echo html_writer::empty_tag('input', [

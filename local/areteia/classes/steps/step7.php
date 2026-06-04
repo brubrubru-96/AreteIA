@@ -77,13 +77,14 @@ class step7 {
             // Use step6 renderers (they are the same class namespace)
             step6::render_correction_public($correction, $data);
 
-            // Justification
+            /* Justificación Pedagógica - temporalmente oculta
             if (!empty($data['justification'])) {
                 echo html_writer::start_tag('div', ['style' => 'font-size:12px; color:#666; font-style:italic; padding:15px; background:#f9f9f9; border-radius:10px; margin-top:20px; border:1px solid #eee;']);
                 echo html_writer::tag('strong', '💡 Justificación Pedagógica: ', ['style' => 'color:#185fa5;']);
                 echo s($data['justification'] ?? '');
                 echo html_writer::end_tag('div');
             }
+            */
         } else {
             echo html_writer::tag('div', 'Error decodificando el instrumento.', ['class' => 'alert alert-danger']);
         }

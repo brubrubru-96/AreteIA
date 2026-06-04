@@ -217,7 +217,7 @@ class step6 {
 
         echo html_writer::end_tag('div');
 
-        // Feedback area for refinement
+        /* Refinamiento del instrumento - temporalmente oculto
         echo html_writer::start_tag('div', ['class' => 'areteia-card', 'style' => 'background:#fffcf5; border:1px solid #faeeda; padding:15px; margin-bottom:20px;']);
         echo html_writer::tag('strong', '✨ ¿Deseas ajustar este instrumento? Pide un cambio a AreteIA:', ['style' => 'display:block; margin-bottom:10px; font-size:12px; color:#854f0b;']);
         echo html_writer::tag('textarea', '', [
@@ -236,6 +236,7 @@ class step6 {
         ]);
         echo html_writer::end_tag('div');
         echo html_writer::end_tag('div');
+        */
 
         // Change correction instrument button
         $change_url = new moodle_url($PAGE->url, array_merge($link_params, ['step' => 6, 'change_corr' => 1]));

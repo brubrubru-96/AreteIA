@@ -140,7 +140,7 @@ class pdf_generator {
         $pdf->Cell(0, 8, 'Total de ítems: ' . count($items), 0, 1, 'R');
         $pdf->Ln(5);
         
-        // Justificación pedagógica
+        /* Justificación pedagógica - temporalmente oculta
         if (!empty($justification)) {
             $pdf->SetFont('helvetica', 'B', 11);
             $pdf->Cell(0, 6, 'Justificación pedagógica:', 0, 1);
@@ -149,6 +149,7 @@ class pdf_generator {
             $pdf->MultiCell(0, 5, $justification, 0, 'L');
             $pdf->Ln(5);
         }
+        */
         
         // Scenario / context
         if (!empty($scenario)) {
@@ -508,6 +509,7 @@ class pdf_generator {
 
         $pdf->writeHTML($html, true, false, true, false, '');
 
+        /* Justificación pedagógica - temporalmente oculta
         if (!empty($data['justification'])) {
             $pdf->Ln(6);
             $pdf->SetFont('helvetica', 'B', 9);
@@ -515,6 +517,7 @@ class pdf_generator {
             $pdf->SetFont('helvetica', 'I', 9);
             $pdf->MultiCell(0, 5, $data['justification'], 0, 'L');
         }
+        */
 
         return $pdf->Output('', 'S');
     }

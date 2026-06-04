@@ -81,11 +81,13 @@ class docx_generator {
         $paragraphs[] = ['text' => 'Total de ítems: ' . count($items)];
         $paragraphs[] = ['text' => ''];
 
+        /* Justificación pedagógica - temporalmente oculta
         if (!empty($justification)) {
             $paragraphs[] = ['text' => 'Justificación pedagógica:', 'bold' => true];
             $paragraphs[] = ['text' => $justification];
             $paragraphs[] = ['text' => ''];
         }
+        */
 
         if (!empty($scenario)) {
             $paragraphs[] = ['text' => 'Escenario / Contexto', 'bold' => true];
@@ -460,10 +462,12 @@ class docx_generator {
         }
 
         $paragraphs[] = ['text' => ''];
+        /* Justificación pedagógica - temporalmente oculta
         if (!empty($data['justification'])) {
             $paragraphs[] = ['text' => 'Justificación pedagógica:', 'bold' => true];
             $paragraphs[] = ['text' => $data['justification']];
         }
+        */
 
         return self::build_docx($paragraphs);
     }
