@@ -133,9 +133,12 @@ class step4 {
                     'style' => 'background:#f8f9fa; border:1px dashed #d3d1c7; padding:20px; margin-bottom:20px;'
                 ]);
                 echo html_writer::tag('strong', '📂 Catálogo: Seleccionar de la lista completa', [
-                    'style' => 'display:block; margin-bottom:10px; font-size:13px; color:#666;'
+                    'style' => 'display:block; margin-bottom:6px; font-size:13px; color:#666;'
                 ]);
-                
+                echo html_writer::tag('p', '⚠️ Si elige un instrumento del catálogo, el sistema generará ese instrumento y no los sugeridos arriba.', [
+                    'style' => 'font-size:12px; color:#854f0b; background:#fffcf5; border:1px solid #faeeda; border-radius:6px; padding:7px 10px; margin-bottom:12px;'
+                ]);
+
                 echo html_writer::start_tag('div', ['style' => 'display:flex; gap:10px; align-items:center;']);
                 echo html_writer::start_tag('select', [
                     'id' => 'instrument-fallback-select',
