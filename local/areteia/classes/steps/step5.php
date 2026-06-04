@@ -189,31 +189,46 @@ class step5 {
                     echo html_writer::start_tag('div', ['class' => 'item-rich-content']);
                     
                     if (strpos($type, 'múltiple') !== false || strpos($type, 'selección') !== false || strpos($type, 'cerrada') !== false) {
-                        // Options list
+                        // Options list — highlight the correct option
                         if (!empty($item['alternativas'])) {
-                            foreach ($item['alternativas'] as $opt) {
-                                echo html_writer::start_tag('div', ['class' => 'item-option']);
-                                echo html_writer::tag('i', '○', ['style' => 'font-style:normal; opacity:0.5;']);
+                            foreach ($item['alternativas'] as $i => $opt) {
+                                $is_correct = isset($item['correct_index']) && (int)$item['correct_index'] === $i;
+                                $opt_style = $is_correct ? 'background:#e8f5e9; border-left:3px solid #2e7d32; padding-left:8px;' : '';
+                                echo html_writer::start_tag('div', ['class' => 'item-option', 'style' => $opt_style]);
+                                $marker = $is_correct ? '✓ ' : '○ ';
+                                $marker_style = 'font-style:normal; ' . ($is_correct ? 'color:#2e7d32; font-weight:bold;' : 'opacity:0.5;');
+                                echo html_writer::tag('span', $marker, ['style' => $marker_style]);
                                 echo s($opt);
                                 echo html_writer::end_tag('div');
                             }
                         }
                     } else if (strpos($type, 'verdadero') !== false) {
-                        // True/False badges
+                        // True/False badges — highlight the correct one
+                        $correct_bool = $item['correct_boolean'] ?? null;
                         echo html_writer::start_tag('div', ['style' => 'display:flex; gap:10px;']);
-                        echo html_writer::tag('span', 'Verdadero', ['class' => 'item-vf-badge item-vf-v']);
-                        echo html_writer::tag('span', 'Falso', ['class' => 'item-vf-badge item-vf-f']);
+                        $v_style = $correct_bool === true  ? 'border:2px solid #2e7d32; font-weight:bold;' : '';
+                        $f_style = $correct_bool === false ? 'border:2px solid #2e7d32; font-weight:bold;' : '';
+                        echo html_writer::tag('span', ($correct_bool === true  ? '✓ ' : '') . 'Verdadero', ['class' => 'item-vf-badge item-vf-v', 'style' => $v_style]);
+                        echo html_writer::tag('span', ($correct_bool === false ? '✓ ' : '') . 'Falso',     ['class' => 'item-vf-badge item-vf-f', 'style' => $f_style]);
                         echo html_writer::end_tag('div');
                     } else if (strpos($type, 'abierta') !== false || strpos($type, 'ensayo') !== false) {
                         // Open box placeholder
                         echo html_writer::tag('div', 'El estudiante redactará su respuesta aquí...', [
                             'style' => 'border:1px dashed #ccc; padding:15px; border-radius:8px; color:#999; font-style:italic; font-size:12px;'
                         ]);
+                        // Show expected short answer if available
+                        if (!empty($item['short_answer'])) {
+                            echo html_writer::tag('div', '✓ Respuesta esperada: ' . s($item['short_answer']), [
+                                'style' => 'font-size:11px; color:#2e7d32; margin-top:6px;'
+                            ]);
+                        }
                     } else {
                         // Default Fallback
                         if (!empty($item['alternativas'])) {
-                            foreach ($item['alternativas'] as $opt) {
-                                echo html_writer::tag('div', "• " . s($opt), ['style' => 'font-size:13px; color:#555; margin-bottom:4px;']);
+                            foreach ($item['alternativas'] as $i => $opt) {
+                                $is_correct = isset($item['correct_index']) && (int)$item['correct_index'] === $i;
+                                $prefix = $is_correct ? '<span style="color:#2e7d32; font-weight:bold;">✓ </span>' : '• ';
+                                echo html_writer::tag('div', $prefix . s($opt), ['style' => 'font-size:13px; color:#555; margin-bottom:4px;']);
                             }
                         }
                     }

@@ -295,40 +295,49 @@ class step6 {
         foreach ($items as $item) {
             $item = (array)$item;
             $q_val = $item['question'] ?? $item['pregunta'] ?? $item['text'] ?? '';
-            $a_val = $item['answer'] ?? $item['respuesta'] ?? $item['correct'] ?? '';
-            
+
             // Flatten arrays/objects if AI hallucinated format
             if (is_array($q_val) || is_object($q_val)) {
-                $q_val = is_array($q_val) && count($q_val) > 0 && is_string($q_val[0]) 
-                    ? implode(' ', $q_val) 
+                $q_val = is_array($q_val) && count($q_val) > 0 && is_string($q_val[0])
+                    ? implode(' ', $q_val)
                     : json_encode($q_val, JSON_UNESCAPED_UNICODE);
             }
             $q = s((string)$q_val);
 
-            // Format answer nicely if it's an array (like matching questions)
-            if (is_array($a_val) || is_object($a_val)) {
-                $a_val = (array)$a_val;
-                $formatted_ans = [];
-                foreach ($a_val as $sub_item) {
-                    if (is_array($sub_item) || is_object($sub_item)) {
-                        $sub_item = (array)$sub_item;
-                        $premise = $sub_item['premise'] ?? $sub_item['premisa'] ?? $sub_item['key'] ?? '';
-                        $ans = $sub_item['answer'] ?? $sub_item['respuesta'] ?? $sub_item['value'] ?? '';
-                        if ($premise && $ans) {
-                            $formatted_ans[] = "<strong>" . s($premise) . ":</strong> " . s($ans);
-                        } else {
-                            $formatted_ans[] = s(json_encode($sub_item, JSON_UNESCAPED_UNICODE));
-                        }
-                    } else {
-                        $formatted_ans[] = s((string)$sub_item);
-                    }
-                }
-                $a = implode('<br><span style="color:#666; font-size:11px;">---</span><br>', $formatted_ans);
+            // model_answers: open-ended items provide ≥2 modelic answers
+            $model_answers = $item['model_answers'] ?? $item['respuestas_modelicas'] ?? null;
+            if (is_array($model_answers) && !empty($model_answers)) {
+                $badge = '<span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:1px 6px; border-radius:3px; display:inline-block; margin-bottom:4px;">Respuesta abierta</span><br>';
+                $items_html = array_map(fn($ma) => '<li style="margin-bottom:3px;">' . s((string)$ma) . '</li>', $model_answers);
+                $a = $badge . '<ol style="margin:2px 0; padding-left:18px;">' . implode('', $items_html) . '</ol>';
             } else {
-                if (is_bool($a_val)) $a_val = $a_val ? 'Verdadero' : 'Falso';
-                $a = s((string)$a_val);
+                // Single answer (closed items)
+                $a_val = $item['answer'] ?? $item['respuesta'] ?? $item['correct'] ?? '';
+                // Format answer nicely if it's an array (like matching questions)
+                if (is_array($a_val) || is_object($a_val)) {
+                    $a_val = (array)$a_val;
+                    $formatted_ans = [];
+                    foreach ($a_val as $sub_item) {
+                        if (is_array($sub_item) || is_object($sub_item)) {
+                            $sub_item = (array)$sub_item;
+                            $premise = $sub_item['premise'] ?? $sub_item['premisa'] ?? $sub_item['key'] ?? '';
+                            $ans = $sub_item['answer'] ?? $sub_item['respuesta'] ?? $sub_item['value'] ?? '';
+                            if ($premise && $ans) {
+                                $formatted_ans[] = "<strong>" . s($premise) . ":</strong> " . s($ans);
+                            } else {
+                                $formatted_ans[] = s(json_encode($sub_item, JSON_UNESCAPED_UNICODE));
+                            }
+                        } else {
+                            $formatted_ans[] = s((string)$sub_item);
+                        }
+                    }
+                    $a = implode('<br><span style="color:#666; font-size:11px;">---</span><br>', $formatted_ans);
+                } else {
+                    if (is_bool($a_val)) $a_val = $a_val ? 'Verdadero' : 'Falso';
+                    $a = s((string)$a_val);
+                }
             }
-            
+
             echo "<tr><td>{$q}</td><td style=\"color:#2e7d32; font-weight:600;\">{$a}</td></tr>";
         }
         echo '</tbody></table>';
@@ -391,7 +400,9 @@ class step6 {
 
     /** 📋 Rúbrica: criterion × levels with descriptors */
     private static function render_rubric(array $data): void {
-        $items = $data['criteria'] ?? $data['criterios'] ?? $data['items'] ?? $data;
+        // Prefer rubric_criteria (has full descriptors + weight per level)
+        // fall back to criteria (simple list) or the whole data array
+        $items = $data['rubric_criteria'] ?? $data['criteria'] ?? $data['criterios'] ?? $data['items'] ?? $data;
         $levels = $data['levels'] ?? $data['niveles'] ?? [];
 
         if (!is_array($items) || empty($items)) {
@@ -437,13 +448,16 @@ class step6 {
 
         foreach ($items as $item) {
             $item = (array)$item;
-            $c_val = $item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '';
+            $c_val = $item['criterion'] ?? $item['criterio'] ?? $item['name'] ?? $item['nombre'] ?? $item['text'] ?? '';
             if (is_array($c_val) || is_object($c_val)) $c_val = json_encode($c_val, JSON_UNESCAPED_UNICODE);
             $c = s((string)$c_val);
-            
-            $weight = isset($item['weight']) ? ' (' . $item['weight'] . '%)' : '';
 
-            echo '<tr><td style="font-weight:600; padding:10px; vertical-align:top; border-right:2px solid #ddd;">' . $c . $weight . '</td>';
+            $weight = isset($item['weight']) ? ' <span style="font-size:10px; color:#555; font-weight:normal;">(' . $item['weight'] . '%)</span>' : '';
+            $c_desc = isset($item['description']) && is_string($item['description'])
+                ? '<br><span style="font-size:10px; color:#777; font-weight:normal;">' . s($item['description']) . '</span>'
+                : '';
+
+            echo '<tr><td style="font-weight:600; padding:10px; vertical-align:top; border-right:2px solid #ddd;">' . $c . $weight . $c_desc . '</td>';
 
 
             $descs = $item['descriptors'] ?? $item['descriptores'] ?? $item['levels'] ?? [];

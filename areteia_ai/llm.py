@@ -549,29 +549,50 @@ def get_correction_prompt(correction_type, correction_label, chosen_instrument, 
     # Type-specific instructions and JSON schema
     type_instructions = {
         "clave_correccion": {
-            "desc": "una CLAVE DE CORRECCIÓN (answer key) que proporcione la respuesta correcta para cada pregunta/ítem del instrumento de evaluación",
+            "desc": "una CLAVE DE CORRECCIÓN (answer key) para cada ítem del instrumento de evaluación",
+            "extra": """INSTRUCCIONES ESPECÍFICAS PARA LA CLAVE DE CORRECCIÓN:
+  - Para ítems de respuesta CERRADA (opción múltiple, verdadero/falso, numérico, emparejamiento):
+    usa \"item_type\": \"cerrada\" y proporciona la respuesta correcta en \"answer\".
+    La respuesta correcta ya está indicada en los ítems del cuestionario (correct_index, correct_boolean, etc.) — extraela directamente.
+    Para opción múltiple: escribe el TEXTO COMPLETO de la opción correcta (no el índice numérico).
+  - Para ítems de respuesta ABIERTA (ensayo, respuesta corta, desarrollo):
+    usa \"item_type\": \"abierta\" y proporciona AL MENOS 2 respuestas modélicas completas en \"model_answers\".""",
             "schema": '''{
     "title": "Clave de corrección para ...",
     "type": "clave_correccion",
     "items": [
-      {"question": "Texto de la pregunta", "answer": "Respuesta correcta"}
+      {
+        "question": "Texto del ítem de respuesta cerrada",
+        "item_type": "cerrada",
+        "answer": "Texto completo de la opción o respuesta correcta"
+      },
+      {
+        "question": "Texto del ítem de respuesta abierta",
+        "item_type": "abierta",
+        "model_answers": [
+          "Primera respuesta modélica completa y correcta",
+          "Segunda respuesta modélica alternativa igualmente válida"
+        ]
+      }
     ],
     "justification": "Breve justificación pedagógica"
   }'''
         },
         "lista_cotejo": {
             "desc": "una LISTA DE COTEJO (checklist) con criterios observables que verifican la presencia o ausencia de componentes requeridos",
+            "extra": "",
             "schema": '''{
     "title": "Lista de cotejo para ...",
     "type": "lista_cotejo",
     "criteria": [
-      {"criterion": "Descripción del criterio observable"}
+      {"criterion": "Descripción del criterio observable y verificable"}
     ],
     "justification": "Breve justificación pedagógica"
   }'''
         },
         "escala_valoracion": {
             "desc": "una ESCALA DE VALORACIÓN con criterios y niveles de logro que permitan graduar el desempeño de forma ágil",
+            "extra": "",
             "schema": '''{
     "title": "Escala de valoración para ...",
     "type": "escala_valoracion",
@@ -583,20 +604,26 @@ def get_correction_prompt(correction_type, correction_label, chosen_instrument, 
   }'''
         },
         "rubrica": {
-            "desc": "una RÚBRICA ANALÍTICA con criterios y descriptores detallados para cada nivel de logro",
+            "desc": "una RÚBRICA ANALÍTICA con criterios, ponderaciones y descriptores detallados para cada nivel de logro",
+            "extra": """INSTRUCCIONES ESPECÍFICAS PARA LA RÚBRICA:
+  - Usa exactamente 4 niveles de desempeño (o 6 si el instrumento es muy complejo). Ejemplo: Insuficiente, Suficiente, Bueno, Destacado.
+  - Asigna una ponderación (weight) a cada criterio. Los pesos deben sumar exactamente 100.
+  - Cada descriptor debe ser concreto, observable y distinguible del nivel anterior y siguiente.
+  - Los criterios y sus descriptores deben estar alineados directamente con los ítems del instrumento de evaluación.""",
             "schema": '''{
     "title": "Rúbrica analítica para ...",
     "type": "rubrica",
     "levels": ["Insuficiente", "Suficiente", "Bueno", "Destacado"],
-    "criteria": [
-      {"criterion": "Nombre del criterio"}
-    ],
     "rubric_criteria": [
       {
         "name": "Nombre del criterio",
-        "description": "Qué se evalúa",
+        "description": "Aspecto del desempeño que se evalúa en este criterio",
+        "weight": 25,
         "levels": [
-          {"label": "Destacado", "score": 4, "description": "Descriptor de desempeño"}
+          {"label": "Insuficiente", "score": 1, "description": "Descriptor detallado del nivel más bajo"},
+          {"label": "Suficiente",   "score": 2, "description": "Descriptor detallado del nivel básico"},
+          {"label": "Bueno",        "score": 3, "description": "Descriptor detallado del nivel adecuado"},
+          {"label": "Destacado",    "score": 4, "description": "Descriptor detallado del nivel máximo"}
         ]
       }
     ],
@@ -606,10 +633,11 @@ def get_correction_prompt(correction_type, correction_label, chosen_instrument, 
     }
 
     info = type_instructions.get(correction_type, type_instructions["rubrica"])
+    extra_sect = f"\n  {info['extra']}\n" if info.get("extra") else ""
 
     return f"""### TAREA A REALIZAR:
   Genera {info['desc']} para un instrumento de evaluación de tipo "{chosen_instrument}".
-
+  {extra_sect}
   ### OBJETIVOS DE APRENDIZAJE:
   {objective}
 
