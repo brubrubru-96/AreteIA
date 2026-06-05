@@ -522,97 +522,101 @@ document.addEventListener("DOMContentLoaded", () => {
  * Step 5: Item Adjustment UI Toggling
  */
 function initItemAdjustmentUI() {
-    document.addEventListener("click", e => {
-        const trigger = e.target.closest(".item-adjust-trigger");
-        if (!trigger) return;
+    // Use direct element binding with a data-ui-bound guard to prevent duplicate listeners
+    // and avoid conflicts with Moodle's own document-level click handlers.
 
-        const index = trigger.dataset.index;
-        const tray = document.querySelector(`.item-adjust-tray[data-index="${index}"]`);
-        if (tray) {
-            tray.classList.toggle("active");
-            trigger.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "Ajustar con IA ✨";
-        }
+    // --- item-adjust-trigger (Ajustar con IA) ---
+    document.querySelectorAll(".item-adjust-trigger:not([data-ui-bound])").forEach(btn => {
+        btn.dataset.uiBound = "1";
+        btn.addEventListener("click", function () {
+            const index = this.dataset.index;
+            const tray = document.querySelector(`.item-adjust-tray[data-index="${index}"]`);
+            if (tray) {
+                tray.classList.toggle("active");
+                this.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "Ajustar con IA ✨";
+            }
+        });
     });
 
-    // Manual edit trigger toggle
-    document.addEventListener("click", e => {
-        const trigger = e.target.closest(".item-edit-trigger");
-        if (trigger) {
-            const index = trigger.dataset.index;
+    // --- item-edit-trigger (Editar manual) ---
+    document.querySelectorAll(".item-edit-trigger:not([data-ui-bound])").forEach(btn => {
+        btn.dataset.uiBound = "1";
+        btn.addEventListener("click", function () {
+            const index = this.dataset.index;
             const tray = document.querySelector(`.item-edit-tray[data-index="${index}"]`);
             if (tray) {
                 tray.classList.toggle("active");
-                trigger.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "✏️ Editar";
+                this.innerHTML = tray.classList.contains("active") ? "Cancelar ✕" : "✏️ Editar";
             }
-            return;
-        }
-        const cancel = e.target.closest(".item-edit-cancel");
-        if (cancel) {
-            const index = cancel.dataset.index;
-            const tray = document.querySelector(`.item-edit-tray[data-index="${index}"]`);
-            if (tray) tray.classList.remove("active");
-            const trigger2 = document.querySelector(`.item-edit-trigger[data-index="${index}"]`);
-            if (trigger2) trigger2.innerHTML = "✏️ Editar";
-        }
+        });
     });
 
-    // AJAX save for manual item editing (avoids nested-form HTML5 violation)
-    document.addEventListener("click", e => {
-        const saveBtn = e.target.closest(".item-edit-save-btn");
-        if (!saveBtn) return;
-        e.preventDefault();
-        e.stopPropagation();
-
-        const tray = saveBtn.closest(".item-edit-tray");
-        if (!tray) return;
-        const index   = tray.dataset.index;
-        const saveUrl = tray.dataset.saveUrl;
-        if (!saveUrl) return;
-
-        // Collect all named fields from the tray
-        const body = new URLSearchParams();
-        tray.querySelectorAll("[name]").forEach(el => {
-            if (el.type === "radio"    && !el.checked) return;
-            if (el.type === "checkbox" && !el.checked) return;
-            body.append(el.name, el.value);
+    // --- item-edit-cancel ---
+    document.querySelectorAll(".item-edit-cancel:not([data-ui-bound])").forEach(btn => {
+        btn.dataset.uiBound = "1";
+        btn.addEventListener("click", function () {
+            const index = this.dataset.index;
+            const tray = document.querySelector(`.item-edit-tray[data-index="${index}"]`);
+            if (tray) tray.classList.remove("active");
+            const trigger = document.querySelector(`.item-edit-trigger[data-index="${index}"]`);
+            if (trigger) trigger.innerHTML = "✏️ Editar";
         });
+    });
 
-        const origText = saveBtn.textContent;
-        saveBtn.textContent = "⏳ Guardando...";
-        saveBtn.disabled = true;
+    // --- item-edit-save-btn (AJAX save, avoids nested-form HTML5 violation) ---
+    document.querySelectorAll(".item-edit-save-btn:not([data-ui-bound])").forEach(btn => {
+        btn.dataset.uiBound = "1";
+        btn.addEventListener("click", function () {
+            const tray = this.closest(".item-edit-tray");
+            if (!tray) return;
+            const saveUrl = tray.dataset.saveUrl;
+            if (!saveUrl) return;
 
-        // Step 1: POST to save_item action (saves to session, follows redirect)
-        fetch(saveUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: body.toString()
-        })
-        .then(() => {
-            // Step 2: Reload step 5 content via AJAX
-            const reloadUrl = new URL(window.location.href);
-            reloadUrl.searchParams.set("ajax", "1");
-            reloadUrl.searchParams.set("step", "5");
-            return fetch(reloadUrl.toString());
-        })
-        .then(r => r.text())
-        .then(html => {
-            const main = document.getElementById("areteia-main");
-            if (main) {
-                main.innerHTML = html;
-                initItemAdjustmentUI();
-                if (typeof initGenerativeLoading === "function") initGenerativeLoading();
-                if (typeof initTreeCheckboxes   === "function") initTreeCheckboxes();
-                if (typeof initIngestionForm    === "function") initIngestionForm();
-                if (typeof initPromptPreview    === "function") initPromptPreview();
-            }
-        })
-        .catch(() => {
-            saveBtn.textContent = "Error al guardar";
-            saveBtn.disabled = false;
-            setTimeout(() => {
-                saveBtn.textContent = origText;
+            const body = new URLSearchParams();
+            tray.querySelectorAll("[name]").forEach(el => {
+                if (el.type === "radio"    && !el.checked) return;
+                if (el.type === "checkbox" && !el.checked) return;
+                body.append(el.name, el.value);
+            });
+
+            const origText = this.textContent;
+            const saveBtn  = this;
+            saveBtn.textContent = "⏳ Guardando...";
+            saveBtn.disabled = true;
+
+            // Step 1: POST to save_item (saves to session)
+            fetch(saveUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: body.toString()
+            })
+            .then(() => {
+                // Step 2: Reload step 5 content
+                const reloadUrl = new URL(window.location.href);
+                reloadUrl.searchParams.set("ajax", "1");
+                reloadUrl.searchParams.set("step", "5");
+                return fetch(reloadUrl.toString());
+            })
+            .then(r => r.text())
+            .then(html => {
+                const main = document.getElementById("areteia-main");
+                if (main) {
+                    main.innerHTML = html;
+                    initItemAdjustmentUI();
+                    if (typeof initGenerativeLoading === "function") initGenerativeLoading();
+                    if (typeof initTreeCheckboxes   === "function") initTreeCheckboxes();
+                    if (typeof initIngestionForm    === "function") initIngestionForm();
+                    if (typeof initPromptPreview    === "function") initPromptPreview();
+                }
+            })
+            .catch(() => {
+                saveBtn.textContent = "Error al guardar";
                 saveBtn.disabled = false;
-            }, 2000);
+                setTimeout(() => {
+                    saveBtn.textContent = origText;
+                    saveBtn.disabled = false;
+                }, 2000);
+            });
         });
     });
 }

@@ -103,7 +103,7 @@ class step4 {
 
             // 2) Ajustar sugerencias (Feedback area) - Only available if something is selected
             if (!empty($effective_sel)) {
-                echo html_writer::start_tag('div', ['class' => 'areteia-card', 'style' => 'background:#fffcf5; border:1px solid #faeeda; padding:15px; margin-bottom:20px;']);
+                echo html_writer::start_tag('div', ['class' => 'areteia-card', 'style' => 'display:none; background:#fffcf5; border:1px solid #faeeda; padding:15px; margin-bottom:20px;']);
                 echo html_writer::tag('strong', '✨ ¿Deseas ajustar estas opciones? Pide un cambio a AreteIA:', ['style' => 'display:block; margin-bottom:10px; font-size:12px; color:#854f0b;']);
                 echo html_writer::tag('textarea', $feedback, [
                     'name' => 'feedback',
