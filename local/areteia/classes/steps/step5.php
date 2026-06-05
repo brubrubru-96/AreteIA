@@ -133,7 +133,7 @@ class step5 {
                         ['style' => 'color:#92400e; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; display:block;']
                     );
                     echo html_writer::tag('div',
-                        format_text($data['scenario'], FORMAT_MARKDOWN),
+                        format_text($data['scenario'], FORMAT_MARKDOWN, ['filter' => false]),
                         ['style' => 'font-size:14px; line-height:1.7; color:#1a1a1a;']
                     );
                     echo html_writer::end_tag('div');
@@ -182,7 +182,7 @@ class step5 {
                     
                     // Consiga (Question Body)
                     echo html_writer::start_tag('div', ['class' => 'item-body-text', 'style' => 'font-size:14px; margin-bottom:15px; color:#1a1a1a; line-height:1.6;']);
-                    echo format_text($item['consiga'] ?? 'Sin texto', FORMAT_MARKDOWN);
+                    echo format_text($item['consiga'] ?? 'Sin texto', FORMAT_MARKDOWN, ['filter' => false]);
                     echo html_writer::end_tag('div');
                     
                     // --- RICH VISUALIZATION BY TYPE ---
@@ -280,16 +280,14 @@ class step5 {
                     $current_consiga   = $item['consiga']    ?? '';
                     $current_diff      = $item['difficulty'] ?? 'Media';
                     $current_points    = $item['points']     ?? 1;
-                    $save_url = new moodle_url($PAGE->url, ['action' => 'save_item', 'id' => $id]);
+                    $save_url = new moodle_url('/local/areteia/index.php', ['id' => $id, 'action' => 'save_item']);
                     echo html_writer::start_tag('div', [
                         'class' => 'item-edit-tray',
-                        'data-index' => $index
+                        'data-index' => $index,
+                        'data-save-url' => $save_url->out(false)
                     ]);
-                    echo html_writer::start_tag('form', [
-                        'method' => 'post',
-                        'action' => $save_url->out(false),
-                        'style'  => 'margin:0;'
-                    ]);
+                    // NOTE: No nested <form> here — fields are submitted via JS fetch to avoid
+                    // invalid nested form (this tray lives inside item-selection-form).
                     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey',    'value' => sesskey()]);
                     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'item_index', 'value' => $index]);
                     echo html_writer::tag('label', 'Consigna / Pregunta', [
@@ -362,7 +360,8 @@ class step5 {
                     // Action buttons
                     echo html_writer::start_tag('div', ['style' => 'display:flex; gap:6px;']);
                     echo html_writer::tag('button', 'Guardar', [
-                        'type'  => 'submit',
+                        'type'  => 'button',
+                        'class' => 'item-edit-save-btn',
                         'style' => 'font-size:11px; padding:4px 12px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer;'
                     ]);
                     echo html_writer::tag('button', 'Cancelar', [
@@ -373,7 +372,7 @@ class step5 {
                     ]);
                     echo html_writer::end_tag('div');
                     echo html_writer::end_tag('div');
-                    echo html_writer::end_tag('form');
+                    // No closing </form> — edit tray no longer uses a nested form
                     echo html_writer::end_tag('div'); // item-edit-tray
                     
                     echo html_writer::end_tag('div'); // body div

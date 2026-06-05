@@ -399,8 +399,10 @@ class action_handler {
     private static function handle_inject_assign(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
         $section_num = optional_param('section_num', 0, PARAM_INT);
         $inst_name = session_manager::get('instrument', '') . ' - AreteIA';
-        $inst_content = session_manager::get('inst_content', '');
         $rubric_content = session_manager::get('rubric_content', '');
+
+        // Prefer filtered selection (items chosen in step 5) over full unfiltered content
+        $inst_content = session_manager::get('inst_content_filtered', '') ?: session_manager::get('inst_content', '');
 
         // Build a rich description from the instrument items
         $description = self::build_activity_description($inst_content, $rubric_content);
@@ -449,8 +451,10 @@ class action_handler {
     private static function handle_inject_forum(int $course_id, \moodle_url $base_url, bool $is_ajax): void {
         $section_num = optional_param('section_num', 0, PARAM_INT);
         $inst_name = session_manager::get('instrument', '') . ' - AreteIA';
-        $inst_content = session_manager::get('inst_content', '');
         $rubric_content = session_manager::get('rubric_content', '');
+
+        // Prefer filtered selection (items chosen in step 5) over full unfiltered content
+        $inst_content = session_manager::get('inst_content_filtered', '') ?: session_manager::get('inst_content', '');
 
         $description = self::build_activity_description($inst_content, $rubric_content);
 
@@ -874,7 +878,7 @@ class action_handler {
             }
         }
 
-        redirect(new \moodle_url($base_url, ['step' => 5, 'id' => $course_id]));
+        redirect(new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'step' => 5]));
     }
 
     /**

@@ -498,36 +498,52 @@ async def generate_endpoint(request: GenerateRequest):
         if isinstance(prompt, dict) and prompt.get("status") == "error":
             return prompt
 
-        # 4. Call LLM
-        response_text, usage = _llm_instance.generate_completion(prompt, system_prompt)
-        
-        if not response_text:
-            return {"status": "error", "message": "AI generation failed"}
+        # 4. Call LLM with automatic retry on parse failure (max 3 attempts)
+        MAX_ATTEMPTS = 3
+        last_error = None
+        usage = None
 
-        # 5. Parse and Validate JSON
-        try:
-            # Step 1: strip markdown code fences (```json ... ``` or ``` ... ```)
-            clean = re.sub(r'^```(?:json)?\s*', '', response_text, flags=re.MULTILINE)
-            clean = re.sub(r'\s*```\s*$', '', clean, flags=re.MULTILINE).strip()
-            # Step 2: extract the outermost { ... } block in case the LLM added preamble/postamble
-            start = clean.find('{')
-            end = clean.rfind('}')
-            if start != -1 and end != -1 and end > start:
-                clean = clean[start:end + 1]
-            validated_data = schema.parse_raw(clean)
-            return {
-                "status": "success", 
-                "output": validated_data.dict(),
-                "usage": usage
-            }
-        except Exception as e:
-            logging.error("Validation failed for LLM output. Raw response: %s", response_text[:500])
-            logging.exception("Validation error detail")
-            return {
-                "status": "error", 
-                "message": "La IA generó un formato no válido. Por favor, intenta de nuevo o ajusta tu petición.",
-                "details": str(e)
-            }
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            response_text, usage = _llm_instance.generate_completion(prompt, system_prompt)
+
+            if not response_text:
+                last_error = "AI generation failed"
+                logging.warning("LLM returned empty response on attempt %d/%d", attempt, MAX_ATTEMPTS)
+                continue
+
+            # 5. Parse and Validate JSON
+            try:
+                # Step 1: strip markdown code fences (```json ... ``` or ``` ... ```)
+                clean = re.sub(r'^```(?:json)?\s*', '', response_text, flags=re.MULTILINE)
+                clean = re.sub(r'\s*```\s*$', '', clean, flags=re.MULTILINE).strip()
+                # Step 2: extract the outermost { ... } block in case the LLM added preamble/postamble
+                start = clean.find('{')
+                end = clean.rfind('}')
+                if start != -1 and end != -1 and end > start:
+                    clean = clean[start:end + 1]
+                validated_data = schema.parse_raw(clean)
+                return {
+                    "status": "success",
+                    "output": validated_data.dict(),
+                    "usage": usage
+                }
+            except Exception as e:
+                last_error = str(e)
+                logging.warning(
+                    "Validation failed on attempt %d/%d. Raw response: %s",
+                    attempt, MAX_ATTEMPTS, response_text[:300]
+                )
+                # Continue to next attempt; avoid retrying if last attempt
+                if attempt < MAX_ATTEMPTS:
+                    continue
+
+        # All attempts exhausted
+        logging.error("All %d LLM attempts failed. Last error: %s", MAX_ATTEMPTS, last_error)
+        return {
+            "status": "error",
+            "message": "La IA generó un formato no válido. Por favor, intenta de nuevo o ajusta tu petición.",
+            "details": last_error
+        }
 
     except Exception as e:
         logging.exception("Error in /generate")

@@ -555,6 +555,66 @@ function initItemAdjustmentUI() {
             if (trigger2) trigger2.innerHTML = "✏️ Editar";
         }
     });
+
+    // AJAX save for manual item editing (avoids nested-form HTML5 violation)
+    document.addEventListener("click", e => {
+        const saveBtn = e.target.closest(".item-edit-save-btn");
+        if (!saveBtn) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const tray = saveBtn.closest(".item-edit-tray");
+        if (!tray) return;
+        const index   = tray.dataset.index;
+        const saveUrl = tray.dataset.saveUrl;
+        if (!saveUrl) return;
+
+        // Collect all named fields from the tray
+        const body = new URLSearchParams();
+        tray.querySelectorAll("[name]").forEach(el => {
+            if (el.type === "radio"    && !el.checked) return;
+            if (el.type === "checkbox" && !el.checked) return;
+            body.append(el.name, el.value);
+        });
+
+        const origText = saveBtn.textContent;
+        saveBtn.textContent = "⏳ Guardando...";
+        saveBtn.disabled = true;
+
+        // Step 1: POST to save_item action (saves to session, follows redirect)
+        fetch(saveUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: body.toString()
+        })
+        .then(() => {
+            // Step 2: Reload step 5 content via AJAX
+            const reloadUrl = new URL(window.location.href);
+            reloadUrl.searchParams.set("ajax", "1");
+            reloadUrl.searchParams.set("step", "5");
+            return fetch(reloadUrl.toString());
+        })
+        .then(r => r.text())
+        .then(html => {
+            const main = document.getElementById("areteia-main");
+            if (main) {
+                main.innerHTML = html;
+                initItemAdjustmentUI();
+                if (typeof initGenerativeLoading === "function") initGenerativeLoading();
+                if (typeof initTreeCheckboxes   === "function") initTreeCheckboxes();
+                if (typeof initIngestionForm    === "function") initIngestionForm();
+                if (typeof initPromptPreview    === "function") initPromptPreview();
+            }
+        })
+        .catch(() => {
+            saveBtn.textContent = "Error al guardar";
+            saveBtn.disabled = false;
+            setTimeout(() => {
+                saveBtn.textContent = origText;
+                saveBtn.disabled = false;
+            }, 2000);
+        });
+    });
 }
 
 /**

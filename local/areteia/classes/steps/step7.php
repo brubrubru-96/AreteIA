@@ -167,11 +167,13 @@ class step7 {
                     $default_weights[] = 100 - ($base_weight * ($num_sel - 1));
                 }
 
+                $filtered_inst_originals = [];
                 $current_idx = 0;
                 foreach ($selected_indices as $idx) {
                     if (isset($data['items'][$idx])) {
                         $item = $data['items'][$idx];
                         $t = strtolower($item['type'] ?? '');
+                        $filtered_inst_originals[] = $item;
                         
                         $q = [
                             'text' => $item['consiga'] ?? '',
@@ -213,8 +215,17 @@ class step7 {
                         'justification' => $data['justification'] ?? '',
                         'items'         => $filtered_items
                     ]);
-                    
                     session_manager::set('final_selection_json', $final_json_payload);
+                }
+
+                // Save filtered items in original inst_content format for assign/forum export preview
+                if (!empty($filtered_inst_originals)) {
+                    session_manager::set('inst_content_filtered', json_encode([
+                        'title'         => $data['title'] ?? 'Evaluación Final',
+                        'scenario'      => $data['scenario'] ?? '',
+                        'justification' => $data['justification'] ?? '',
+                        'items'         => array_values($filtered_inst_originals)
+                    ]));
                 }
             }
         }
@@ -265,7 +276,7 @@ class step7 {
                         ['style' => 'color:#92400e; font-size:12px; text-transform:uppercase; margin-bottom:8px; display:block;']
                     );
                     echo html_writer::tag('div',
-                        format_text($data['scenario'], FORMAT_MARKDOWN, ['context' => $context]),
+                        format_text($data['scenario'], FORMAT_MARKDOWN, ['context' => $context, 'filter' => false]),
                         ['style' => 'font-size:13px; line-height:1.6;']
                     );
                     echo html_writer::end_tag('div');
@@ -281,7 +292,7 @@ class step7 {
                         ['style' => 'color:#6c63ff; font-size:11px;']
                     );
                     echo html_writer::tag('div',
-                        format_text($item['text'] ?? $item['consiga'] ?? '', FORMAT_MARKDOWN),
+                        format_text($item['text'] ?? $item['consiga'] ?? '', FORMAT_MARKDOWN, ['filter' => false]),
                         ['style' => 'font-size:13px;']
                     );
                     echo html_writer::end_tag('div');
@@ -352,7 +363,7 @@ class step7 {
                     echo html_writer::start_tag('div', ['style' => 'margin-bottom:10px; border-bottom:1px solid #f0f0f0; padding-bottom:10px; display:flex; justify-content:space-between; gap:20px;']);
                     echo html_writer::start_tag('div', ['style' => 'flex:1; font-size:12px;']);
                     echo html_writer::tag('div', '<strong>' . ($index + 1) . '. ' . s($item['type']) . '</strong>', ['style' => 'color:#6c63ff; font-size:11px;']);
-                    echo html_writer::tag('div', format_text($item['text'] ?? $item['consiga'] ?? '', FORMAT_MARKDOWN));
+                    echo html_writer::tag('div', format_text($item['text'] ?? $item['consiga'] ?? '', FORMAT_MARKDOWN, ['filter' => false]));
                     echo html_writer::end_tag('div');
 
                     // Peso/Ponderación input
@@ -438,7 +449,9 @@ class step7 {
             ]);
 
             // Instrument preview — parse JSON so we show formatted content, not raw JSON
-            $inst_data = @json_decode($inst_content, true);
+            // Prefer filtered selection (from step 5 checkbox submission) when available
+            $inst_content_filtered = session_manager::get('inst_content_filtered', '');
+            $inst_data = @json_decode($inst_content_filtered ?: $inst_content, true);
             echo html_writer::start_tag('div', [
                 'class' => 'areteia-markdown-content',
                 'style' => 'font-size:12px; background:#fcfcfc; padding:12px; border-radius:8px; margin-bottom:15px; border:1px solid #eee; max-height:350px; overflow-y:auto;',
@@ -450,13 +463,13 @@ class step7 {
                 if (!empty($inst_data['scenario'])) {
                     echo html_writer::start_tag('div', ['style' => 'background:#fffbea; border-left:4px solid #f59e0b; padding:10px; border-radius:6px; margin-bottom:10px;']);
                     echo html_writer::tag('div', '📖 <strong>Escenario / Contexto</strong>', ['style' => 'color:#92400e; font-size:11px; margin-bottom:6px;']);
-                    echo format_text($inst_data['scenario'], FORMAT_MARKDOWN, ['context' => $context]);
+                    echo format_text($inst_data['scenario'], FORMAT_MARKDOWN, ['context' => $context, 'filter' => false]);
                     echo html_writer::end_tag('div');
                 }
                 foreach (($inst_data['items'] ?? []) as $idx => $item) {
                     echo html_writer::start_tag('div', ['style' => 'margin-bottom:8px; border-bottom:1px solid #f0f0f0; padding-bottom:6px;']);
                     echo html_writer::tag('div', '<strong>' . ($idx + 1) . '. ' . s($item['type'] ?? '') . '</strong>', ['style' => 'color:#6c63ff; font-size:11px;']);
-                    echo html_writer::tag('div', format_text($item['consiga'] ?? $item['text'] ?? '', FORMAT_MARKDOWN, ['context' => $context]), ['style' => 'font-size:12px;']);
+                    echo html_writer::tag('div', format_text($item['consiga'] ?? $item['text'] ?? '', FORMAT_MARKDOWN, ['context' => $context, 'filter' => false]), ['style' => 'font-size:12px;']);
                     echo html_writer::end_tag('div');
                 }
             } else {
@@ -472,7 +485,7 @@ class step7 {
                 ]);
                 $preview_rub = mb_strimwidth($rubric_content, 0, 500, '...');
                 echo html_writer::tag('div',
-                    format_text($preview_rub, FORMAT_MARKDOWN, ['context' => $context]),
+                    format_text($preview_rub, FORMAT_MARKDOWN, ['context' => $context, 'filter' => false]),
                     [
                         'class' => 'areteia-markdown-content',
                         'style' => 'font-size:12px; background:#fcfcfc; padding:10px; border-radius:8px; border:1px solid #eee;',

@@ -206,6 +206,8 @@ class step4 {
                 'evaluación oral', 'evaluacion oral',
                 'evaluación auténtica', 'evaluacion autentica',
                 'aprendizaje servicio', 'portafolio', 'juego de rol',
+                'ensayo', 'debate', 'análisis de fuentes', 'analisis de fuentes',
+                'investigaci', 'glosario',
             ];
             foreach ($fixed_patterns as $fp) {
                 if (mb_strpos($name_lower, $fp) !== false) { $hide_num_items = true; break; }

@@ -135,12 +135,16 @@ El instrumento debe incluir estos componentes como ítems separados:
 
     "ensayo-desarrollo": """\
 **ESTRUCTURA OBLIGATORIA — ENSAYO/DESARROLLO:**
-Construí la consigna con estos 5 componentes como ítems separados:
+Este instrumento es UNA ÚNICA consigna de producción escrita (1 solo ítem, tipo "Ensayo / Respuesta abierta").
+Su campo `consiga` debe ser un texto integrado y cohesionado que contemple OBLIGATORIAMENTE los siguientes 5 componentes estructurales. NO los generés como 5 ítems separados — deben estar entretejidos en la redacción de esa única consigna:
+
 1. **Situación de escritura** — Una pregunta, problema o dilema que abra una tensión genuina dentro del campo disciplinar. Debe obligar a tomar posición y argumentarla, NO a exponer información.
 2. **Condiciones de producción** — Especificá si es domiciliario o presencial, individual o colaborativo, con o sin fuentes provistas, extensión esperada y si se contempla alguna instancia de borrador previo.
 3. **Criterios de textualidad** — Qué se espera en términos de coherencia, cohesión, estructura argumentativa, uso de conectores lógicos y progresión temática.
 4. **Criterios de contenido disciplinar** — Precisión conceptual, pertinencia de los argumentos respecto de la bibliografía de la materia y capacidad de contextualización dentro del campo.
-5. **Criterios de posicionamiento argumentativo** — Qué se espera en términos de sostener una tesis propia, anticipar objeciones y responderlas.""",
+5. **Criterios de posicionamiento argumentativo** — Qué se espera en términos de sostener una tesis propia, anticipar objeciones y responderlas.
+
+El resultado es 1 ítem JSON cuya `consiga` lee como una consigna de ensayo completa y autocontenida.""",
 
     "debate": """\
 **ESTRUCTURA OBLIGATORIA — DEBATE:**
@@ -176,7 +180,7 @@ El instrumento debe incluir:
 │   3-5 párrafos basada en el campo profesional, con datos suficientes y algunos irrelevantes
 │   para que el estudiante discrimine). NUNCA pongas la narrativa en los ítems.
 │ ITEMS: Cada uno es una TAREA o PREGUNTA sobre el caso narrado en el scenario.
-Componentes obligatorios como ítems (tipo “Ensayo / Respuesta abierta”):
+Componentes obligatorios como ítems (tipo "Ensayo / Respuesta abierta"):
 1. **Preguntas críticas de análisis** — Preguntas que obliguen a ANALIZAR el caso, no a recordar (niveles Bloom ANALIZAR/EVALUAR/CREAR).
 2. **Dinámica de trabajo** — Instrucciones claras para trabajo en pequeños grupos y plenario.
 3. **Criterios de evaluación** — Qué se evaluará: delimitar el problema, identificar datos relevantes, proponer alternativas fundamentadas.""",
@@ -222,11 +226,20 @@ El instrumento debe incluir estos componentes como ítems separados:
 
     "mapa-conceptual": """\
 **ESTRUCTURA OBLIGATORIA — MAPA CONCEPTUAL:**
-El instrumento debe incluir:
-1. **Consigna detallada** — Explicar la diferencia entre mapa conceptual y cuadro sinóptico; qué se espera en términos de jerarquía (de lo más general a los ejemplos) y palabras de enlace.
-2. **Listado de conceptos semilla** — Un set de 10-15 conceptos clave que el alumno debe incluir obligatoriamente (con espacio para agregar otros).
-3. **Requisito de enlaces cruzados** — Al menos X relaciones entre conceptos de diferentes segmentos del mapa para demostrar visión integradora.
-4. **Criterios de evaluación** — Pertinencia, jerarquía, relaciones, integración de conceptos.""",
+Este instrumento produce 1 único ítem (tipo "Ensayo / Respuesta abierta") cuya consigna guía al
+estudiante en la elaboración de un mapa conceptual específico de la asignatura.
+La consigna debe integrar OBLIGATORIAMENTE:
+1. **Qué representar y por qué** — Explicá la diferencia entre mapa conceptual y cuadro sinóptico;
+   especificá el tipo de mapa (jerarquía, red, circular) y la profundidad esperada.
+2. **Listado de conceptos semilla** — Extraé DIRECTAMENTE de los materiales y objetivos del curso
+   provistos arriba entre 10 y 15 conceptos clave ESPECÍFICOS de la asignatura. Estos conceptos
+   deben ser los nodos obligatorios del mapa del estudiante. PROHIBIDO usar conceptos genéricos
+   sobre "el mapa" en lugar del contenido disciplinar; si los materiales no son suficientes,
+   usá el nombre del campo disciplinar y los términos que aparezcan en los objetivos.
+3. **Requisito de enlaces cruzados** — Especificá cuántas relaciones cruzadas entre ramas del mapa
+   debe mostrar el estudiante para demostrar visión integradora.
+4. **Criterios de evaluación** — Pertinencia conceptual según los materiales, jerarquía,
+   relaciones con conectores precisos, integración de contenidos.""",
 
     "monografia": """\
 **ESTRUCTURA OBLIGATORIA — MONOGRAFÍA:**
@@ -442,13 +455,30 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
         scenario_json_field = '\n    "scenario": "NARRATIVA COMPLETA: mínimo 4 párrafos con personaje concreto, datos factuales, tensión/dilema y vocabulario técnico. Este campo es el núcleo del instrumento.",'
 
     # For template-driven instruments, tell the model to follow the template count, not num_items
+    # Maps instrument_id -> exact number of components defined in its INSTRUMENT_SPECIFIC_TEMPLATES entry
+    TEMPLATE_COMPONENT_COUNTS = {
+        "analisis-fuentes": 1,
+        "aps": 4,
+        "ensayo-desarrollo": 1,   # 1 único ítem con los 5 componentes embebidos en la consigna
+        "debate": 5,
+        "escape-room": 6,
+        "esquema": 5,
+        "estudio-caso": 3,
+        "ev-oral": 4,
+        "glosario": 5,
+        "investigacion": 9,
+        "rol": 4,
+        "mapa-conceptual": 1,   # 1 único ítem con los 4 componentes embebidos en la consigna
+    }
     has_template = instrument_id in INSTRUMENT_SPECIFIC_TEMPLATES
-    items_rule = (
-        f"Generá EXACTAMENTE los componentes definidos en la GUÍA ESPECÍFICA DEL INSTRUMENTO "
-        f"(ignorá el número {num_items} — la guía define la estructura completa)."
-        if has_template else
-        f"Generá exactamente {num_items} ítems/componentes."
-    )
+    if has_template:
+        n_comp = TEMPLATE_COMPONENT_COUNTS.get(instrument_id, "los")
+        items_rule = (
+            f"Generá EXACTAMENTE {n_comp} componentes como están definidos numerados en la GUÍA ESPECÍFICA DEL INSTRUMENTO "
+            f"(NO generés ni más ni menos — la guía define la estructura completa e irremplazable)."
+        )
+    else:
+        items_rule = f"Generá exactamente {num_items} ítems/componentes."
 
     return f"""### TAREA A REALIZAR:
   Diseñar ítems/componentes de evaluación para un instrumento de tipo: {chosen_instrument}.
