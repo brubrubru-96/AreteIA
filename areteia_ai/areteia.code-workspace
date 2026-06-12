@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "../../version_uba/areteia"
+		},
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"intelephense.diagnostics.undefinedFunctions": false,
+		"intelephense.diagnostics.undefinedConstants": false,
+		"intelephense.diagnostics.undefinedTypes": false,
+		"intelephense.diagnostics.undefinedVariables": false,
+		"intelephense.diagnostics.duplicateSymbols": true,
+		"intelephense.diagnostics.implementationErrors": true
+	}
+}
