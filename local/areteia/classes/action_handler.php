@@ -89,6 +89,16 @@ class action_handler {
                 self::handle_save_item($course_id, $base_url);
                 return true;
 
+            case 'save_title':
+                require_sesskey();
+                self::handle_save_title($course_id);
+                return true;
+
+            case 'save_scenario':
+                require_sesskey();
+                self::handle_save_scenario($course_id);
+                return true;
+
             case 'export_correction_pdf':
                 self::handle_export_correction_pdf($course_id);
                 return true;
@@ -878,6 +888,32 @@ class action_handler {
             }
         }
 
+        redirect(new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'step' => 5]));
+    }
+
+    private static function handle_save_title(int $course_id): void {
+        $title_text = optional_param('title_text', '', PARAM_TEXT);
+        if (trim($title_text) !== '') {
+            $raw  = session_manager::get('inst_content', '');
+            $data = $raw ? json_decode($raw, true) : null;
+            if ($data) {
+                $data['title'] = $title_text;
+                session_manager::set('inst_content', json_encode($data));
+            }
+        }
+        redirect(new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'step' => 5]));
+    }
+
+    private static function handle_save_scenario(int $course_id): void {
+        $scenario_text = optional_param('scenario_text', '', PARAM_TEXT);
+        if (trim($scenario_text) !== '') {
+            $raw  = session_manager::get('inst_content', '');
+            $data = $raw ? json_decode($raw, true) : null;
+            if ($data) {
+                $data['scenario'] = $scenario_text;
+                session_manager::set('inst_content', json_encode($data));
+            }
+        }
         redirect(new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'step' => 5]));
     }
 

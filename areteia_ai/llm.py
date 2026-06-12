@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from abc import ABC, abstractmethod
 from dotenv import load_dotenv
@@ -156,14 +157,24 @@ El instrumento debe incluir estos componentes como ítems separados:
 5. **Criterios de evaluación** — Los criterios mínimos que deben cumplir las intervenciones (uso de bibliografía, contraargumentación, escucha activa).""",
 
     "escape-room": """\
-**ESTRUCTURA OBLIGATORIA — ESCAPE ROOM:**
-El instrumento debe incluir estos componentes como ítems separados:
-1. **Narrativa o mundo ficcional** — Un escenario que dé marco y sentido a toda la experiencia, coherente con el campo disciplinar, que genere inmersión y urgencia sin ser arbitrario respecto de los contenidos.
-2. **Desafío central o misión** — El problema global que los estudiantes deben resolver para "escapar", directamente coherente con los objetivos de aprendizaje.
-3. **Pruebas o puzzles (4-6)** — Una secuencia de desafíos donde cada uno active una operación cognitiva distinta (analizar, relacionar, aplicar, deducir, transferir) anclada en los contenidos.
-4. **Sistema de pistas y ayuda** — Cuántas pistas están disponibles, cómo se solicitan y qué nivel de orientación ofrecen.
-5. **Tiempo y dinámica grupal** — Límite temporal justificado pedagógicamente y especificación de roles del equipo.
-6. **Desenlace y debriefing** — Instancia de reflexión post-juego sobre qué conceptos pusieron en juego.""",
+**ESTRUCTURA OBLIGATORIA — ESCAPE ROOM PEDAGÓGICO:**
+⚠️ ESTE INSTRUMENTO NO ES UN CUESTIONARIO. PROHIBIDO generar preguntas de opción múltiple,
+verdadero/falso, emparejamiento o cloze como "puzzles". Los retos deben tener LÓGICA DE
+DESBLOQUEO: resolver un puzzle revela una LLAVE que da acceso al siguiente.
+
+MECÁNICA TRANSVERSAL (obligatoria en todos los puzzles):
+- Cada puzzle tiene una LLAVE (código, palabra, número o símbolo) que se obtiene al resolverlo.
+- La LLAVE está cifrada u oculta en la consigna del puzzle siguiente, integrada en la narrativa.
+- Las PISTAS son parte del texto de cada puzzle ("Disponéis de X pistas — solicitadlas a [protocolo]").
+  NO se genera un ítem separado de pistas.
+
+ÍTEMS (6, todos de tipo "Ensayo / Respuesta abierta"):
+1. **Misión central** — El objetivo global para "escapar": qué debe lograr el equipo, qué LLAVE MAESTRA abre la salida, y qué conocimiento disciplinar lo hace posible.
+2. **Puzzle 1 — Apertura** (nivel cognitivo: RECORDAR/COMPRENDER) — Reto anclado en los contenidos del curso. La respuesta correcta genera LLAVE-A. Consigna incluye: "1 pista disponible."
+3. **Puzzle 2 — Desarrollo** (nivel: ANALIZAR) — Contiene un dato/objeto que solo se descifra con LLAVE-A. La solución genera LLAVE-B. Incluye: "2 pistas disponibles."
+4. **Puzzle 3 — Escalada** (nivel: EVALUAR o APLICAR) — Requiere LLAVE-B para acceder. Genera LLAVE-C. Incluye: "2 pistas disponibles."
+5. **Puzzle 4 — Desafío final** (nivel: CREAR o EVALUAR) — Integra saberes de los 3 puzzles anteriores. Su solución es la LLAVE MAESTRA. Incluye: "3 pistas disponibles."
+6. **Debriefing reflexivo** — NO es un puzzle. Es meta-cognición post-juego: 3-4 preguntas abiertas sobre qué conceptos disciplinares pusieron en juego, dónde encontraron el mayor obstáculo cognitivo, y qué conexiones establecieron con los materiales de estudio. Escrito en 2ª persona plural.""",
 
     "esquema": """\
 **ESTRUCTURA OBLIGATORIA — ESQUEMA:**
@@ -251,6 +262,16 @@ El instrumento debe incluir estos componentes como ítems separados:
 5. **Criterios de manejo de fuentes** — Selección, citación, paráfrasis e integración de fuentes especializadas.
 6. **Criterios de contenido disciplinar** — Precisión conceptual, pertinencia de las fuentes, capacidad de articular perspectivas teóricas.
 7. **Criterios de textualidad académica** — Coherencia, cohesión, registro formal, progresión temática.""",
+
+    "cuestionario": """\
+⚠️ ADVERTENCIA CRÍTICA — CUESTIONARIO:
+Las preguntas DEBEN evaluar el CONTENIDO DISCIPLINAR de la asignatura tal como aparece en los
+OBJETIVOS Y MATERIALES DEL CURSO proporcionados en esta tarea. PROHIBIDO:
+- Preguntas sobre el funcionamiento de la plataforma Moodle, el campus virtual o la estructura
+  administrativa del curso (fechas de entrega, modalidad de cursada, cómo usar foros, etc.).
+- Preguntas genéricas de "conocimiento general" desvinculadas de los materiales.
+Cada pregunta debe poder responderse EXCLUSIVAMENTE a partir del contenido disciplinar
+especificado en los objetivos y materiales del curso provistos abajo.""",
 
     "portafolio": """\
 **ESTRUCTURA OBLIGATORIA — PORTAFOLIO:**
@@ -471,14 +492,16 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
         "mapa-conceptual": 1,   # 1 único ítem con los 4 componentes embebidos en la consigna
     }
     has_template = instrument_id in INSTRUMENT_SPECIFIC_TEMPLATES
-    if has_template:
-        n_comp = TEMPLATE_COMPONENT_COUNTS.get(instrument_id, "los")
+    if has_template and instrument_id in TEMPLATE_COMPONENT_COUNTS:
+        n_comp = TEMPLATE_COMPONENT_COUNTS[instrument_id]
         items_rule = (
             f"Generá EXACTAMENTE {n_comp} componentes como están definidos numerados en la GUÍA ESPECÍFICA DEL INSTRUMENTO "
             f"(NO generés ni más ni menos — la guía define la estructura completa e irremplazable)."
         )
     else:
-        items_rule = f"Generá exactamente {num_items} ítems/componentes."
+        # No fixed count: use teacher-defined num_items.
+        # If there IS a template, it provides pedagogical guidance but not a count constraint.
+        items_rule = f"Generá exactamente {num_items} ítems/componentes. Seguí las indicaciones de la GUÍA ESPECÍFICA DEL INSTRUMENTO si la hay."
 
     return f"""### TAREA A REALIZAR:
   Diseñar ítems/componentes de evaluación para un instrumento de tipo: {chosen_instrument}.

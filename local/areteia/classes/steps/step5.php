@@ -120,23 +120,102 @@ class step5 {
                 // Ensure items is a list for JS
                 $data['items'] = array_values($data['items'] ?? []);
                 
-                echo html_writer::tag('h3', $data['title'] ?? 'Propuesta de Ítems', ['style' => 'color:#185fa5; margin-bottom:15px;']);
+                // --- EDITABLE TITLE ---
+                $current_title   = $data['title'] ?? 'Propuesta de Ítems';
+                $title_save_url  = new moodle_url('/local/areteia/index.php', ['id' => $id, 'action' => 'save_title']);
+                echo html_writer::start_tag('div', ['style' => 'display:flex; align-items:center; gap:10px; margin-bottom:8px;']);
+                echo html_writer::tag('h3', $current_title, ['style' => 'color:#185fa5; margin:0; flex:1;']);
+                echo html_writer::tag('button', '✏️ Editar título', [
+                    'type'       => 'button',
+                    'class'      => 'item-edit-trigger',
+                    'data-index' => 'title',
+                    'style'      => 'font-size:11px; padding:3px 8px; background:none; border:1px solid #bbb; border-radius:4px; cursor:pointer; color:#666;'
+                ]);
+                echo html_writer::end_tag('div');
+                echo html_writer::start_tag('div', [
+                    'class'          => 'item-edit-tray',
+                    'data-index'     => 'title',
+                    'data-save-url'  => $title_save_url->out(false),
+                    'style'          => 'margin-bottom:12px;'
+                ]);
+                echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey',    'value' => sesskey()]);
+                echo html_writer::tag('label', 'Título del instrumento', ['style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:4px; color:#555;']);
+                echo html_writer::empty_tag('input', [
+                    'type'  => 'text',
+                    'name'  => 'title_text',
+                    'value' => s($current_title),
+                    'class' => 'form-control',
+                    'style' => 'margin-bottom:8px;'
+                ]);
+                echo html_writer::start_tag('div', ['style' => 'display:flex; gap:6px;']);
+                echo html_writer::tag('button', 'Guardar', [
+                    'type'  => 'button',
+                    'class' => 'item-edit-save-btn',
+                    'style' => 'font-size:11px; padding:4px 12px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer;'
+                ]);
+                echo html_writer::tag('button', 'Cancelar', [
+                    'type'       => 'button',
+                    'class'      => 'item-edit-cancel',
+                    'data-index' => 'title',
+                    'style'      => 'font-size:11px; padding:4px 10px; background:none; border:1px solid #bbb; border-radius:4px; cursor:pointer; color:#666;'
+                ]);
+                echo html_writer::end_tag('div');
+                echo html_writer::end_tag('div'); // title edit tray
 
-                // --- SCENARIO / NARRATIVE BOX ---
+                // --- SCENARIO / NARRATIVE BOX (editable) ---
                 if (!empty($data['scenario'])) {
+                    $scenario_save_url = new moodle_url('/local/areteia/index.php', ['id' => $id, 'action' => 'save_scenario']);
                     echo html_writer::start_tag('div', [
                         'class' => 'areteia-card',
                         'style' => 'background:#fffbea; border-left:5px solid #f59e0b; padding:20px; margin-bottom:20px; border-radius:8px;'
                     ]);
+                    // Header row with edit button
+                    echo html_writer::start_tag('div', ['style' => 'display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;']);
                     echo html_writer::tag('div',
                         '📖 <strong>Escenario / Contexto del Instrumento</strong>',
-                        ['style' => 'color:#92400e; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; display:block;']
+                        ['style' => 'color:#92400e; font-size:13px; text-transform:uppercase; letter-spacing:0.04em;']
                     );
+                    echo html_writer::tag('button', '✏️ Editar', [
+                        'type'       => 'button',
+                        'class'      => 'item-edit-trigger',
+                        'data-index' => 'scenario',
+                        'style'      => 'font-size:11px; padding:3px 8px; background:none; border:1px solid #bbb; border-radius:4px; cursor:pointer; color:#666; flex-shrink:0;'
+                    ]);
+                    echo html_writer::end_tag('div');
+                    // Scenario text
                     echo html_writer::tag('div',
                         format_text($data['scenario'], FORMAT_MARKDOWN, ['filter' => false]),
                         ['style' => 'font-size:14px; line-height:1.7; color:#1a1a1a;']
                     );
+                    // Scenario edit tray
+                    echo html_writer::start_tag('div', [
+                        'class'         => 'item-edit-tray',
+                        'data-index'    => 'scenario',
+                        'data-save-url' => $scenario_save_url->out(false)
+                    ]);
+                    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+                    echo html_writer::tag('label', 'Escenario / Contexto', ['style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:4px; color:#555;']);
+                    echo html_writer::tag('textarea', s($data['scenario']), [
+                        'name'  => 'scenario_text',
+                        'rows'  => 8,
+                        'class' => 'item-adjust-textarea',
+                        'style' => 'margin-bottom:8px;'
+                    ]);
+                    echo html_writer::start_tag('div', ['style' => 'display:flex; gap:6px;']);
+                    echo html_writer::tag('button', 'Guardar', [
+                        'type'  => 'button',
+                        'class' => 'item-edit-save-btn',
+                        'style' => 'font-size:11px; padding:4px 12px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer;'
+                    ]);
+                    echo html_writer::tag('button', 'Cancelar', [
+                        'type'       => 'button',
+                        'class'      => 'item-edit-cancel',
+                        'data-index' => 'scenario',
+                        'style'      => 'font-size:11px; padding:4px 10px; background:none; border:1px solid #bbb; border-radius:4px; cursor:pointer; color:#666;'
+                    ]);
                     echo html_writer::end_tag('div');
+                    echo html_writer::end_tag('div'); // scenario edit tray
+                    echo html_writer::end_tag('div'); // scenario card
                 }
                 
                 // Form for item selection

@@ -982,7 +982,7 @@ textarea[name="feedback"]:focus {
 }
 
 .item-edit-tray.active {
-    max-height: 420px;
+    max-height: 600px;
     border-top: 1px solid #eee;
     padding-top: 10px;
 }
