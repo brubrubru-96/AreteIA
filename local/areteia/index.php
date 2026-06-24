@@ -25,7 +25,7 @@ $action = optional_param('action', 'lib', PARAM_ALPHANUMEXT);
 $step   = optional_param('step', -1, PARAM_INT); // -1 to detect if not provided
 
 // Allow server-side redirect actions to bypass tab validation
-$server_actions = ['sync', 'ingest', 'export', 'delete_rag', 'preview', 'inject_quiz', 'inject_assign', 'inject_forum', 'export_pdf', 'export_pdf_teacher', 'export_docx', 'export_docx_teacher', 'adjust_item', 'save_item', 'export_correction_pdf', 'export_correction_docx'];
+$server_actions = ['sync', 'ingest', 'export', 'delete_rag', 'preview', 'inject_quiz', 'inject_assign', 'inject_forum', 'export_pdf', 'export_pdf_teacher', 'export_docx', 'export_docx_teacher', 'adjust_item', 'save_item', 'save_correction', 'export_correction_pdf', 'export_correction_docx'];
 if (!isset(\local_areteia\step_renderer::ACTIONS[$action]) && !in_array($action, $server_actions)) {
     $action = 'lib';
 }

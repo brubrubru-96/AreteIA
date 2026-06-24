@@ -89,6 +89,11 @@ class action_handler {
                 self::handle_save_item($course_id, $base_url);
                 return true;
 
+            case 'save_correction':
+                require_sesskey();
+                self::handle_save_correction($course_id);
+                return true;
+
             case 'save_title':
                 require_sesskey();
                 self::handle_save_title($course_id);
@@ -919,6 +924,100 @@ class action_handler {
             }
         }
         redirect(new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'step' => 5]));
+    }
+
+    /**
+     * Save manually edited correction instrument back to session.
+     */
+    private static function handle_save_correction(int $course_id): void {
+        $correction_type = optional_param('correction_type', '', PARAM_ALPHANUMEXT);
+        $title           = optional_param('corr_title', '', PARAM_TEXT);
+
+        if (empty($correction_type)) {
+            redirect(new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'action' => 'crit', 'step' => 6]));
+        }
+
+        // Preserve justification if present in existing data
+        $existing_raw = session_manager::get('correction_content', '');
+        $existing     = $existing_raw ? json_decode($existing_raw, true) : [];
+        $justification = is_array($existing) ? ($existing['justification'] ?? '') : '';
+
+        $data = ['title' => $title, 'type' => $correction_type];
+        if ($justification !== '') {
+            $data['justification'] = $justification;
+        }
+
+        switch ($correction_type) {
+            case 'lista_cotejo':
+                $criteria_raw = optional_param_array('corr_criterion', [], PARAM_TEXT);
+                $data['criteria'] = array_values(array_map(
+                    fn($c) => ['criterion' => trim($c)],
+                    array_filter($criteria_raw, fn($c) => trim($c) !== '')
+                ));
+                break;
+
+            case 'escala_valoracion':
+                $criteria_raw = optional_param_array('corr_criterion', [], PARAM_TEXT);
+                $levels_raw   = optional_param_array('corr_level', [], PARAM_TEXT);
+                $data['criteria'] = array_values(array_map(
+                    fn($c) => ['criterion' => trim($c)],
+                    array_filter($criteria_raw, fn($c) => trim($c) !== '')
+                ));
+                $data['levels'] = array_values(array_filter(array_map('trim', $levels_raw), fn($l) => $l !== ''));
+                break;
+
+            case 'clave_correccion':
+                $num_items = (int)optional_param('corr_num_items', 0, PARAM_INT);
+                $items = [];
+                for ($i = 0; $i < $num_items; $i++) {
+                    $q         = optional_param("corr_q_{$i}", '', PARAM_TEXT);
+                    $item_type = optional_param("corr_itype_{$i}", 'cerrada', PARAM_ALPHANUMEXT);
+                    if ($item_type === 'abierta') {
+                        $ma_raw       = optional_param("corr_ma_{$i}", '', PARAM_TEXT);
+                        $model_answers = array_values(array_filter(
+                            array_map('trim', explode("\n", str_replace("\r", '', $ma_raw))),
+                            fn($l) => $l !== ''
+                        ));
+                        $items[] = ['question' => $q, 'item_type' => 'abierta', 'model_answers' => $model_answers];
+                    } else {
+                        $a       = optional_param("corr_a_{$i}", '', PARAM_TEXT);
+                        $items[] = ['question' => $q, 'item_type' => 'cerrada', 'answer' => $a];
+                    }
+                }
+                $data['items'] = $items;
+                break;
+
+            case 'rubrica':
+                $num_criteria = (int)optional_param('corr_num_criteria', 0, PARAM_INT);
+                $num_levels   = (int)optional_param('corr_num_levels', 0, PARAM_INT);
+                $levels = [];
+                for ($li = 0; $li < $num_levels; $li++) {
+                    $levels[] = optional_param("corr_global_level_{$li}", '', PARAM_TEXT);
+                }
+                $rubric_criteria = [];
+                for ($ci = 0; $ci < $num_criteria; $ci++) {
+                    $criterion = [
+                        'name'        => optional_param("corr_cname_{$ci}", '', PARAM_TEXT),
+                        'description' => optional_param("corr_cdesc_{$ci}", '', PARAM_TEXT),
+                        'weight'      => (int)optional_param("corr_weight_{$ci}", 0, PARAM_INT),
+                        'levels'      => [],
+                    ];
+                    for ($li = 0; $li < $num_levels; $li++) {
+                        $criterion['levels'][] = [
+                            'label'       => optional_param("corr_ll_{$ci}_{$li}", '', PARAM_TEXT),
+                            'score'       => (int)optional_param("corr_ls_{$ci}_{$li}", 0, PARAM_INT),
+                            'description' => optional_param("corr_ld_{$ci}_{$li}", '', PARAM_TEXT),
+                        ];
+                    }
+                    $rubric_criteria[] = $criterion;
+                }
+                $data['levels']          = $levels;
+                $data['rubric_criteria'] = $rubric_criteria;
+                break;
+        }
+
+        session_manager::set('correction_content', json_encode($data));
+        redirect(new \moodle_url('/local/areteia/index.php', ['id' => $course_id, 'action' => 'crit', 'step' => 6]));
     }
 
     /**

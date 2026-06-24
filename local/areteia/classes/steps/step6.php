@@ -208,6 +208,7 @@ class step6 {
             $data = json_decode($correction_content, true);
             if (is_array($data)) {
                 self::render_correction_instrument($correction, $data);
+                self::render_edit_section($id, $correction, $data);
             } else {
                 echo html_writer::tag('div', 'Error decodificando la respuesta de la IA.', ['class' => 'alert alert-danger']);
             }
@@ -493,6 +494,193 @@ class step6 {
 
         echo '</tbody></table>';
         echo html_writer::end_tag('div');
+    }
+
+    // ==================================================================
+    // Manual edit section (step 6 only — not exposed in step 7)
+    // ==================================================================
+
+    private static function render_edit_section(int $id, string $correction_type, array $data): void {
+        $save_url = new moodle_url('/local/areteia/index.php', ['id' => $id, 'action' => 'save_correction']);
+        $input_style = 'width:100%; font-size:12px; border-radius:4px; border:1px solid #ddd; padding:5px 8px; box-sizing:border-box;';
+
+        echo html_writer::tag('button', '✏️ Editar manualmente', [
+            'type'    => 'button',
+            'onclick' => 'var el=document.getElementById("corr-edit-form");el.style.display=el.style.display==="none"?"block":"none";this.textContent=el.style.display==="none"?"✏️ Editar manualmente":"✖ Cerrar editor";',
+            'class'   => 'areteia-btn',
+            'style'   => 'font-size:11px; margin-top:12px;'
+        ]);
+
+        echo html_writer::start_tag('div', ['id' => 'corr-edit-form', 'style' => 'display:none; margin-top:14px; border-top:1px solid #c8e6c9; padding-top:14px;']);
+        echo html_writer::start_tag('form', ['method' => 'POST', 'action' => $save_url->out(false)]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey',         'value' => sesskey()]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'correction_type', 'value' => $correction_type]);
+
+        // Title
+        echo html_writer::tag('label', 'Título', ['style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:3px; color:#555;']);
+        echo html_writer::empty_tag('input', ['type' => 'text', 'name' => 'corr_title', 'value' => s($data['title'] ?? ''), 'style' => $input_style . ' margin-bottom:14px;']);
+
+        switch ($correction_type) {
+            case 'lista_cotejo':      self::render_edit_checklist($data);      break;
+            case 'escala_valoracion': self::render_edit_rating_scale($data);   break;
+            case 'clave_correccion':  self::render_edit_answer_key($data);     break;
+            case 'rubrica':           self::render_edit_rubric($data);         break;
+        }
+
+        echo html_writer::start_tag('div', ['style' => 'display:flex; gap:8px; margin-top:14px;']);
+        echo html_writer::tag('button', '💾 Guardar cambios', ['type' => 'submit', 'class' => 'areteia-btn areteia-btn-primary', 'style' => 'font-size:12px;']);
+        echo html_writer::tag('button', 'Cancelar', [
+            'type'    => 'button',
+            'onclick' => 'document.getElementById("corr-edit-form").style.display="none";',
+            'class'   => 'areteia-btn',
+            'style'   => 'font-size:12px;'
+        ]);
+        echo html_writer::end_tag('div');
+        echo html_writer::end_tag('form');
+        echo html_writer::end_tag('div');
+    }
+
+    private static function render_edit_checklist(array $data): void {
+        $items = $data['criteria'] ?? $data['criterios'] ?? $data['items'] ?? [];
+        $ta = 'width:100%; font-size:12px; border-radius:4px; border:1px solid #ddd; padding:4px 6px; margin-bottom:5px; box-sizing:border-box;';
+        echo html_writer::tag('p', 'Criterios:', ['style' => 'font-size:11px; font-weight:600; color:#555; margin:0 0 6px;']);
+        foreach ($items as $i => $item) {
+            $item = (array)$item;
+            $c = $item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '';
+            echo html_writer::tag('label', ($i + 1) . '.', ['style' => 'font-size:11px; color:#666; display:block; margin-top:4px;']);
+            echo html_writer::tag('textarea', s((string)$c), ['name' => 'corr_criterion[]', 'rows' => 2, 'style' => $ta]);
+        }
+    }
+
+    private static function render_edit_rating_scale(array $data): void {
+        $items  = $data['criteria'] ?? $data['criterios'] ?? $data['items'] ?? [];
+        $levels = $data['levels']   ?? $data['niveles']   ?? ['Insuficiente', 'Suficiente', 'Bueno', 'Destacado'];
+        $ta = 'width:100%; font-size:12px; border-radius:4px; border:1px solid #ddd; padding:4px 6px; margin-bottom:5px; box-sizing:border-box;';
+
+        echo html_writer::tag('p', 'Nombres de niveles:', ['style' => 'font-size:11px; font-weight:600; color:#555; margin:0 0 4px;']);
+        echo html_writer::start_tag('div', ['style' => 'display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;']);
+        foreach ($levels as $lv) {
+            $lv = is_array($lv) ? ($lv['label'] ?? $lv['name'] ?? '') : $lv;
+            echo html_writer::empty_tag('input', ['type' => 'text', 'name' => 'corr_level[]', 'value' => s((string)$lv),
+                'style' => 'font-size:12px; border-radius:4px; border:1px solid #ddd; padding:4px 6px; width:130px;']);
+        }
+        echo html_writer::end_tag('div');
+
+        echo html_writer::tag('p', 'Criterios:', ['style' => 'font-size:11px; font-weight:600; color:#555; margin:0 0 4px;']);
+        foreach ($items as $i => $item) {
+            $item = (array)$item;
+            $c = $item['criterion'] ?? $item['criterio'] ?? $item['text'] ?? '';
+            echo html_writer::tag('label', ($i + 1) . '.', ['style' => 'font-size:11px; color:#666; display:block; margin-top:4px;']);
+            echo html_writer::tag('textarea', s((string)$c), ['name' => 'corr_criterion[]', 'rows' => 2, 'style' => $ta]);
+        }
+    }
+
+    private static function render_edit_answer_key(array $data): void {
+        $items = $data['items'] ?? $data['answers'] ?? [];
+        $ta = 'width:100%; font-size:12px; border-radius:4px; border:1px solid #ddd; padding:4px 6px; box-sizing:border-box;';
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'corr_num_items', 'value' => count($items)]);
+
+        foreach ($items as $i => $item) {
+            $item      = (array)$item;
+            $q         = $item['question'] ?? $item['pregunta'] ?? $item['text'] ?? '';
+            $item_type = $item['item_type'] ?? (isset($item['model_answers']) ? 'abierta' : 'cerrada');
+
+            echo html_writer::start_tag('div', ['style' => 'border:1px solid #eee; border-radius:6px; padding:8px; margin-bottom:8px;']);
+            echo html_writer::tag('label', 'Ítem ' . ($i + 1) . ' — Pregunta:', ['style' => 'font-size:11px; color:#555; display:block; margin-bottom:2px;']);
+            echo html_writer::tag('textarea', s((string)$q), ['name' => "corr_q_{$i}", 'rows' => 2, 'style' => $ta . ' margin-bottom:6px;']);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => "corr_itype_{$i}", 'value' => $item_type]);
+
+            if ($item_type === 'abierta') {
+                $mas     = $item['model_answers'] ?? $item['respuestas_modelicas'] ?? [];
+                $ma_text = implode("\n", array_map(fn($m) => is_string($m) ? $m : (string)$m, $mas));
+                echo html_writer::tag('label', 'Respuestas modelo (una por línea):', ['style' => 'font-size:11px; color:#555; display:block; margin-bottom:2px;']);
+                echo html_writer::tag('textarea', s($ma_text), ['name' => "corr_ma_{$i}", 'rows' => 3, 'style' => $ta]);
+            } else {
+                $a_val = $item['answer'] ?? $item['respuesta'] ?? $item['correct'] ?? '';
+                if (is_bool($a_val))                        $a_val = $a_val ? 'Verdadero' : 'Falso';
+                if (is_array($a_val) || is_object($a_val)) $a_val = json_encode($a_val, JSON_UNESCAPED_UNICODE);
+                echo html_writer::tag('label', 'Respuesta correcta:', ['style' => 'font-size:11px; color:#555; display:block; margin-bottom:2px;']);
+                echo html_writer::tag('textarea', s((string)$a_val), ['name' => "corr_a_{$i}", 'rows' => 2, 'style' => $ta]);
+            }
+            echo html_writer::end_tag('div');
+        }
+    }
+
+    private static function render_edit_rubric(array $data): void {
+        $items  = $data['rubric_criteria'] ?? $data['criteria'] ?? $data['criterios'] ?? [];
+        $levels = $data['levels'] ?? $data['niveles'] ?? [];
+
+        // Infer level names from first criterion if levels array is empty
+        if (empty($levels) && !empty($items)) {
+            $first = (array)reset($items);
+            $descs = $first['descriptors'] ?? $first['descriptores'] ?? $first['levels'] ?? [];
+            $levels = array_map(fn($d) => is_array($d) ? ($d['label'] ?? $d['level'] ?? '') : (string)$d, $descs);
+        }
+        $num_levels = count($levels);
+
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'corr_num_criteria', 'value' => count($items)]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'corr_num_levels',   'value' => $num_levels]);
+
+        // Global level names row
+        echo html_writer::tag('p', 'Nombres de niveles:', ['style' => 'font-size:11px; font-weight:600; color:#555; margin:0 0 4px;']);
+        echo html_writer::start_tag('div', ['style' => 'display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;']);
+        foreach ($levels as $li => $lv) {
+            echo html_writer::empty_tag('input', ['type' => 'text', 'name' => "corr_global_level_{$li}", 'value' => s((string)$lv),
+                'placeholder' => 'Nivel ' . ($li + 1),
+                'style' => 'font-size:12px; border-radius:4px; border:1px solid #ddd; padding:4px 6px; width:130px;']);
+        }
+        echo html_writer::end_tag('div');
+
+        foreach ($items as $ci => $item) {
+            $item       = (array)$item;
+            $name       = $item['name']        ?? $item['criterion'] ?? $item['criterio'] ?? $item['nombre'] ?? '';
+            $desc       = $item['description'] ?? '';
+            $weight     = $item['weight']      ?? '';
+            $item_levels = $item['descriptors'] ?? $item['descriptores'] ?? $item['levels'] ?? [];
+
+            echo html_writer::start_tag('div', ['style' => 'border:1px solid #e0d6ff; border-radius:6px; padding:10px; margin-bottom:10px; background:#fafafa;']);
+            echo html_writer::tag('strong', 'Criterio ' . ($ci + 1), ['style' => 'font-size:12px; color:#6c63ff; display:block; margin-bottom:8px;']);
+
+            // Name + weight row
+            echo html_writer::start_tag('div', ['style' => 'display:flex; gap:10px; margin-bottom:6px; flex-wrap:wrap;']);
+            echo html_writer::start_tag('div', ['style' => 'flex:2; min-width:150px;']);
+            echo html_writer::tag('label', 'Nombre:', ['style' => 'font-size:11px; color:#555; display:block; margin-bottom:2px;']);
+            echo html_writer::empty_tag('input', ['type' => 'text', 'name' => "corr_cname_{$ci}", 'value' => s((string)$name),
+                'style' => 'width:100%; font-size:12px; border-radius:4px; border:1px solid #ddd; padding:4px 6px; box-sizing:border-box;']);
+            echo html_writer::end_tag('div');
+            echo html_writer::start_tag('div', ['style' => 'width:80px;']);
+            echo html_writer::tag('label', 'Peso (%):', ['style' => 'font-size:11px; color:#555; display:block; margin-bottom:2px;']);
+            echo html_writer::empty_tag('input', ['type' => 'number', 'name' => "corr_weight_{$ci}", 'value' => s((string)$weight),
+                'min' => '0', 'max' => '100',
+                'style' => 'width:100%; font-size:12px; border-radius:4px; border:1px solid #ddd; padding:4px 6px; box-sizing:border-box;']);
+            echo html_writer::end_tag('div');
+            echo html_writer::end_tag('div');
+
+            // Description
+            echo html_writer::tag('label', 'Descripción del criterio:', ['style' => 'font-size:11px; color:#555; display:block; margin-bottom:2px;']);
+            echo html_writer::tag('textarea', s((string)$desc), ['name' => "corr_cdesc_{$ci}", 'rows' => 2,
+                'style' => 'width:100%; font-size:12px; border-radius:4px; border:1px solid #ddd; padding:4px 6px; margin-bottom:8px; box-sizing:border-box;']);
+
+            // Per-level descriptors
+            foreach ($item_levels as $li => $level) {
+                $level = (array)$level;
+                $ll    = $level['label']       ?? $level['nivel']      ?? $level['level'] ?? ($levels[$li] ?? ('Nivel ' . ($li + 1)));
+                $ls    = $level['score']       ?? $level['puntaje']    ?? ($li + 1);
+                $ld    = $level['description'] ?? $level['descriptor'] ?? $level['text']  ?? '';
+                $lv_display = s((string)($levels[$li] ?? $ll));
+
+                echo html_writer::tag('label', 'Descriptor — ' . $lv_display . ':', ['style' => 'font-size:11px; color:#666; display:block; margin-bottom:2px;']);
+                echo html_writer::start_tag('div', ['style' => 'display:flex; gap:6px; margin-bottom:6px; align-items:flex-start;']);
+                echo html_writer::empty_tag('input', ['type' => 'text',   'name' => "corr_ll_{$ci}_{$li}", 'value' => s((string)$ll), 'placeholder' => 'Etiqueta',
+                    'style' => 'width:110px; flex-shrink:0; font-size:11px; border-radius:4px; border:1px solid #ddd; padding:3px 5px;']);
+                echo html_writer::empty_tag('input', ['type' => 'number', 'name' => "corr_ls_{$ci}_{$li}", 'value' => s((string)$ls), 'placeholder' => 'Pts',
+                    'style' => 'width:55px; flex-shrink:0; font-size:11px; border-radius:4px; border:1px solid #ddd; padding:3px 5px;']);
+                echo html_writer::tag('textarea', s((string)$ld), ['name' => "corr_ld_{$ci}_{$li}", 'rows' => 2,
+                    'style' => 'flex:1; font-size:11px; border-radius:4px; border:1px solid #ddd; padding:3px 5px;']);
+                echo html_writer::end_tag('div');
+            }
+            echo html_writer::end_tag('div');
+        }
     }
 
     // ==================================================================
