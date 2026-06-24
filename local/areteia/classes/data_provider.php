@@ -679,13 +679,14 @@ class data_provider {
         global $DB;
 
         $correct = $q_data['correct'] ?? true;
+        $fb_incorrect = !empty($q_data['feedback_incorrect']) ? $q_data['feedback_incorrect'] : '';
 
         $true_ans               = new \stdClass();
         $true_ans->question     = $qid;
         $true_ans->answer       = 'True';
         $true_ans->answerformat = FORMAT_MOODLE;
         $true_ans->fraction     = $correct ? 1.0 : 0.0;
-        $true_ans->feedback     = '';
+        $true_ans->feedback     = $correct ? '' : $fb_incorrect;
         $true_ans->feedbackformat = FORMAT_HTML;
         $true_id = $DB->insert_record('question_answers', $true_ans);
 
@@ -694,7 +695,7 @@ class data_provider {
         $false_ans->answer       = 'False';
         $false_ans->answerformat = FORMAT_MOODLE;
         $false_ans->fraction     = $correct ? 0.0 : 1.0;
-        $false_ans->feedback     = '';
+        $false_ans->feedback     = $correct ? $fb_incorrect : '';
         $false_ans->feedbackformat = FORMAT_HTML;
         $false_id = $DB->insert_record('question_answers', $false_ans);
 
@@ -746,7 +747,7 @@ class data_provider {
         $opts->correctfeedbackformat       = FORMAT_HTML;
         $opts->partiallycorrectfeedback    = '';
         $opts->partiallycorrectfeedbackformat = FORMAT_HTML;
-        $opts->incorrectfeedback           = 'Incorrecto.';
+        $opts->incorrectfeedback           = !empty($q_data['feedback_incorrect']) ? $q_data['feedback_incorrect'] : 'Incorrecto.';
         $opts->incorrectfeedbackformat     = FORMAT_HTML;
         $DB->insert_record('qtype_match_options', $opts);
     }

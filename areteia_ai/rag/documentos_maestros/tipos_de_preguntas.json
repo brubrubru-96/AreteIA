@@ -50,11 +50,6 @@
     "definition": "Las denominadas preguntas clásicas pueden expresarse bajo la forma interrogativa o imperativa y demandan una respuesta corta y unívoca: una palabra, expresión, cifra, símbolo, etcétera. Si la respuesta requerida es más extensa, por ejemplo, explicaciones o enumeraciones que se resuelven en dos o tres renglones, ya no se trataría de una pregunta clásica, sino de una forma de examen de respuesta abierta, aunque el límite es difícil de determinar. Las preguntas clásicas, al igual que otros ítems, pueden referirse a un material ausente o a un soporte presente: texto, gráfico, datos estadísticos, imágenes, etcétera."
   },
   {
-    "id": "texto-lacunar",
-    "name": "Texto lacunar:",
-    "definition": "El texto lacunar presenta un mensaje estructurado, en el que el texto tiene una serie de “lagunas” (espacios en blanco) que deben completarse. Es similar al mensaje para completar, pero en este caso no se trata de afirmaciones independientes sino estructuradas en un párrafo. ● El texto debe estar correctamente estructurado y evitar informaciones accesorias. ● Los espacios para completar no deben estar precedidos por artículos o seguidos de adjetivos porque dan indicios del género y número del término que se debe completar. Cuando el género y el número de algunas palabras resultan sugerentes, deben incluirse ambas alternativas utilizando paréntesis. ● Los espacios para completar deben ser uniformes para que su tamaño no sugiera la respuesta. ● Debe revisarse que la cantidad y distribución de los espacios en blanco no “oscurekcan” el sentido del mensaje."
-  },
-  {
     "id": "numerica",
     "name": "Numérica:",
     "definition": "Permite una respuesta numérica (con posibilidad de especificar las unidades) que es calificada comparándola con distintas respuestas modelo (es posible incluir márgenes de tolerancia)."

@@ -532,12 +532,14 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
       - **Opción múltiple**: `consiga` (enunciado), `alternativas` (mínimo 4), `correct_index` (0-indexed).
       - **Verdadero/Falso**: `consiga` (afirmación), `correct_boolean` (true/false).
       - **Emparejamiento / Poner en orden**: `consiga` y lista `pairs` con `{{"premise": "P1", "answer": "A1"}}`.
-      - **Respuesta breve / Texto lacunar**: `consiga` y respuesta esperada en `short_answer`.
+      - **Respuesta breve**: `consiga` y respuesta esperada en `short_answer`.
       - **Numérica**: `consiga` y valor exacto en `numerical_value`.
       - **Ensayo / Respuesta abierta / Tarea de producción**: Orientaciones completas en `consiga`. Para instrumentos complejos volcá el contenido del componente aquí en detalle.
   5. Redactá con rigor pedagógico y coherencia con los extractos de materiales.
   6. Asigná una dificultad ("Fácil", "Media", "Difícil").
   7. **Refinamiento parcial**: Si en "AJUSTES ESPECÍFICOS" se menciona un ítem en particular (ej: `[Ítem 1] ...`), REGENERÁ sólo ese ítem y mantené el resto exactamente igual.
+  8. **PROHIBICIÓN ABSOLUTA — CONTENIDO META-EVALUATIVO:** Ningún ítem puede preguntar sobre el instrumento de evaluación en sí, sobre la metodología de evaluación, sobre otras consignas del mismo instrumento, ni sobre las reglas de calificación o la estructura del examen. Todos los ítems deben indagar EXCLUSIVAMENTE sobre el CONTENIDO DISCIPLINAR del curso, tal como surge de los objetivos y los materiales proporcionados.
+  9. **CAMPO OPCIONAL feedback_incorrect:** Para ítems de tipo Verdadero/Falso, Emparejamiento o Poner en orden, PODÉS incluir el campo `"feedback_incorrect"` con una retroalimentación pedagógica breve (1-2 oraciones) que explique por qué la respuesta incorrecta es incorrecta y oriente al estudiante hacia la comprensión correcta. Si lo incluís, debe ser específico al contenido del ítem (no genérico como "Respuesta incorrecta").
 
   ### FORMATO DE RESPUESTA (JSON ÚNICAMENTE):
   {{
@@ -553,7 +555,8 @@ def get_design_prompt(chosen_instrument, instrument_desc, structured_materials, 
         "correct_boolean": null,
         "pairs": [ {{"premise": "P1", "answer": "A1"}} ],
         "short_answer": "...",
-        "numerical_value": null
+        "numerical_value": null,
+        "feedback_incorrect": null
       }}
     ],
     "justification": "Explica la coherencia pedagógica: función evaluativa, modalidad, tipo de contenido y alineación con Bloom."

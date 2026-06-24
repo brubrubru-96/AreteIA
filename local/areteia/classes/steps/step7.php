@@ -189,11 +189,17 @@ class step7 {
                         } elseif (strpos($t, 'verdadero') !== false) {
                             $q['type'] = 'truefalse';
                             $q['correct'] = isset($item['correct_boolean']) ? (bool)$item['correct_boolean'] : true;
+                            if (!empty($item['feedback_incorrect'])) {
+                                $q['feedback_incorrect'] = $item['feedback_incorrect'];
+                            }
                         } elseif (strpos($t, 'emparejamiento') !== false || strpos($t, 'orden') !== false) {
                             $q['type'] = 'match';
                             $q['pairs'] = array_map(function($p) {
                                 return ['premise' => $p['premise'] ?? '', 'answer' => $p['answer'] ?? ''];
                             }, $item['pairs'] ?? []);
+                            if (!empty($item['feedback_incorrect'])) {
+                                $q['feedback_incorrect'] = $item['feedback_incorrect'];
+                            }
                         } elseif (strpos($t, 'breve') !== false || strpos($t, 'clásica') !== false) {
                             $q['type'] = 'shortanswer';
                             $q['correct'] = $item['short_answer'] ?? '';
@@ -239,6 +245,16 @@ class step7 {
         $is_assign      = self::is_assign_instrument($instrument);
 
         echo html_writer::tag('p', 'Instrumento de evaluación finalizado', ['class' => 'areteia-stitle']);
+
+        // Translation map: Moodle internal type -> Spanish display label
+        $item_type_labels = [
+            'multichoice'  => 'Opción múltiple',
+            'truefalse'    => 'Verdadero/Falso',
+            'match'        => 'Emparejamiento',
+            'shortanswer'  => 'Respuesta breve',
+            'numerical'    => 'Numérica',
+            'essay'        => 'Ensayo / Respuesta abierta',
+        ];
 
         // Determine activity type from instrument
         $activity_type = encaje_table::get_activity_type($instrument);
@@ -288,7 +304,8 @@ class step7 {
                 ]);
                 foreach (($data['items'] ?? []) as $index => $item) {
                     echo html_writer::start_tag('div', ['style' => 'margin-bottom:10px; border-bottom:1px solid #f0f0f0; padding-bottom:8px;']);
-                    echo html_writer::tag('div', '<strong>' . ($index + 1) . '. ' . s($item['type']) . '</strong>',
+                    $display_type = $item_type_labels[$item['type']] ?? $item['type'];
+                    echo html_writer::tag('div', '<strong>' . ($index + 1) . '. ' . s($display_type) . '</strong>',
                         ['style' => 'color:#6c63ff; font-size:11px;']
                     );
                     echo html_writer::tag('div',
@@ -362,7 +379,8 @@ class step7 {
                 foreach (($data['items'] ?? []) as $index => $item) {
                     echo html_writer::start_tag('div', ['style' => 'margin-bottom:10px; border-bottom:1px solid #f0f0f0; padding-bottom:10px; display:flex; justify-content:space-between; gap:20px;']);
                     echo html_writer::start_tag('div', ['style' => 'flex:1; font-size:12px;']);
-                    echo html_writer::tag('div', '<strong>' . ($index + 1) . '. ' . s($item['type']) . '</strong>', ['style' => 'color:#6c63ff; font-size:11px;']);
+                    $display_type = $item_type_labels[$item['type']] ?? $item['type'];
+                    echo html_writer::tag('div', '<strong>' . ($index + 1) . '. ' . s($display_type) . '</strong>', ['style' => 'color:#6c63ff; font-size:11px;']);
                     echo html_writer::tag('div', format_text($item['text'] ?? $item['consiga'] ?? '', FORMAT_MARKDOWN, ['filter' => false]));
                     echo html_writer::end_tag('div');
 

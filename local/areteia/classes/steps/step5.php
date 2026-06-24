@@ -290,6 +290,40 @@ class step5 {
                         echo html_writer::tag('span', ($correct_bool === true  ? '✓ ' : '') . 'Verdadero', ['class' => 'item-vf-badge item-vf-v', 'style' => $v_style]);
                         echo html_writer::tag('span', ($correct_bool === false ? '✓ ' : '') . 'Falso',     ['class' => 'item-vf-badge item-vf-f', 'style' => $f_style]);
                         echo html_writer::end_tag('div');
+                        if (!empty($item['feedback_incorrect'])) {
+                            echo html_writer::tag('div', '💬 Retroalimentación si es incorrecto: ' . s($item['feedback_incorrect']), [
+                                'style' => 'font-size:11px; color:#e65100; margin-top:6px; font-style:italic;'
+                            ]);
+                        }
+                    } else if (strpos($type, 'emparej') !== false || strpos($type, 'orden') !== false) {
+                        // Pairs / Ordering table — show all terms/concepts visibly
+                        if (!empty($item['pairs'])) {
+                            $is_order = strpos($type, 'orden') !== false;
+                            $col1_label = $is_order ? 'Elemento' : 'Premisa';
+                            $col2_label = $is_order ? 'Posición correcta' : 'Respuesta correcta';
+                            echo html_writer::start_tag('table', ['style' => 'width:100%; border-collapse:collapse; font-size:13px; margin-top:4px;']);
+                            echo html_writer::start_tag('thead');
+                            echo html_writer::start_tag('tr');
+                            echo html_writer::tag('th', $col1_label, ['style' => 'text-align:left; padding:6px 8px; border-bottom:2px solid #6c63ff; color:#185fa5; font-size:11px; font-weight:700;']);
+                            echo html_writer::tag('th', $col2_label, ['style' => 'text-align:left; padding:6px 8px; border-bottom:2px solid #6c63ff; color:#185fa5; font-size:11px; font-weight:700;']);
+                            echo html_writer::end_tag('tr');
+                            echo html_writer::end_tag('thead');
+                            echo html_writer::start_tag('tbody');
+                            foreach ($item['pairs'] as $pi => $pair) {
+                                $row_style = ($pi % 2 === 0) ? 'background:#f7f4ff;' : 'background:#fff;';
+                                echo html_writer::start_tag('tr', ['style' => $row_style]);
+                                echo html_writer::tag('td', s($pair['premise'] ?? ''), ['style' => 'padding:6px 8px; border-bottom:1px solid #eee;']);
+                                echo html_writer::tag('td', s($pair['answer'] ?? ''), ['style' => 'padding:6px 8px; border-bottom:1px solid #eee; color:#2e7d32; font-weight:500;']);
+                                echo html_writer::end_tag('tr');
+                            }
+                            echo html_writer::end_tag('tbody');
+                            echo html_writer::end_tag('table');
+                        }
+                        if (!empty($item['feedback_incorrect'])) {
+                            echo html_writer::tag('div', '💬 Retroalimentación si es incorrecto: ' . s($item['feedback_incorrect']), [
+                                'style' => 'font-size:11px; color:#e65100; margin-top:8px; font-style:italic;'
+                            ]);
+                        }
                     } else if (strpos($type, 'abierta') !== false || strpos($type, 'ensayo') !== false) {
                         // Open box placeholder
                         echo html_writer::tag('div', 'El estudiante redactará su respuesta aquí...', [
@@ -411,6 +445,21 @@ class step5 {
                         echo 'Falso';
                         echo html_writer::end_tag('label');
                         echo html_writer::end_tag('div');
+                    }
+                    // Feedback for incorrect answers (V/F, emparejamiento, orden)
+                    $is_fb_edit = $is_tf_edit || strpos($type, 'emparej') !== false || strpos($type, 'orden') !== false;
+                    if ($is_fb_edit) {
+                        $current_fb = $item['feedback_incorrect'] ?? '';
+                        echo html_writer::tag('label', 'Retroalimentación si responde mal', [
+                            'style' => 'font-size:11px; font-weight:600; display:block; margin-bottom:4px; margin-top:8px; color:#555;'
+                        ]);
+                        echo html_writer::tag('textarea', s($current_fb), [
+                            'name'        => 'item_feedback_incorrect',
+                            'rows'        => 2,
+                            'class'       => 'item-adjust-textarea',
+                            'style'       => 'margin-bottom:8px;',
+                            'placeholder' => 'Ej: Revisá la unidad 3 — la secuencia correcta sigue el orden cronológico del proceso.'
+                        ]);
                     }
                     echo html_writer::start_tag('div', ['style' => 'display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;']);
                     // Difficulty select

@@ -847,12 +847,13 @@ class action_handler {
      * Save manually-edited item fields (consiga, difficulty, points) into session.
      */
     private static function handle_save_item(int $course_id, \moodle_url $base_url): void {
-        $item_index      = optional_param('item_index',           -1,   PARAM_INT);
-        $new_consiga     = optional_param('item_consiga',         '',   PARAM_TEXT);
-        $difficulty      = optional_param('item_difficulty',      '',   PARAM_TEXT);
-        $points          = optional_param('item_points',          null, PARAM_FLOAT);
-        $correct_index   = optional_param('item_correct_index',   null, PARAM_INT);
-        $correct_boolean = optional_param('item_correct_boolean', null, PARAM_TEXT);
+        $item_index           = optional_param('item_index',              -1,   PARAM_INT);
+        $new_consiga          = optional_param('item_consiga',            '',   PARAM_TEXT);
+        $difficulty           = optional_param('item_difficulty',         '',   PARAM_TEXT);
+        $points               = optional_param('item_points',             null, PARAM_FLOAT);
+        $correct_index        = optional_param('item_correct_index',      null, PARAM_INT);
+        $correct_boolean      = optional_param('item_correct_boolean',    null, PARAM_TEXT);
+        $feedback_incorrect   = optional_param('item_feedback_incorrect', null, PARAM_TEXT);
 
         if ($item_index >= 0) {
             $raw_content = session_manager::get('inst_content', '');
@@ -874,6 +875,9 @@ class action_handler {
                 }
                 if ($correct_boolean === '1' || $correct_boolean === '0') {
                     $data['items'][$item_index]['correct_boolean'] = ($correct_boolean === '1');
+                }
+                if ($feedback_incorrect !== null) {
+                    $data['items'][$item_index]['feedback_incorrect'] = trim($feedback_incorrect);
                 }
                 session_manager::set('inst_content', json_encode($data));
 

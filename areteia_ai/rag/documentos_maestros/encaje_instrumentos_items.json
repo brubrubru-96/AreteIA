@@ -30,7 +30,6 @@
     "opcion-multiple",
     "orden",
     "respuesta-breve",
-    "texto-lacunar",
     "verdadero-falso"
   ],
   "debate": [
@@ -49,7 +48,6 @@
     "opcion-multiple",
     "orden",
     "respuesta-breve",
-    "texto-lacunar",
     "verdadero-falso"
   ],
   "esquema": [
@@ -105,7 +103,6 @@
     "opcion-multiple",
     "orden",
     "respuesta-breve",
-    "texto-lacunar",
     "verdadero-falso"
   ],
   "recension-biblio": [

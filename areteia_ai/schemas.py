@@ -26,6 +26,7 @@ class InstrumentItem(BaseModel):
     pairs: Optional[List[ItemPair]] = None # For Matching
     short_answer: Optional[str] = None # For Short Answer
     numerical_value: Optional[float] = None # For Numerical
+    feedback_incorrect: Optional[str] = None # Optional feedback shown when student answers incorrectly (V/F, match, order)
 
     @root_validator(pre=True)
     def normalize_consiga(cls, values):
