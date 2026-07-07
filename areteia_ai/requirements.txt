@@ -25,3 +25,5 @@ langchain==0.0.202
 dashscope
 openai
 python-dotenv
+pytesseract
+pdf2image

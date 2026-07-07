@@ -22,16 +22,40 @@ def get_model():
             _MODEL = SentenceTransformer("intfloat/multilingual-e5-small")
     return _MODEL
 
+import logging
+
 def extract_pdf(path):
     pages_text = []
     try:
         reader = PdfReader(str(path))
-        for page in reader.pages:
+        for idx, page in enumerate(reader.pages):
             t = page.extract_text()
-            if t:
+            # If the page has digital text of reasonable length, use it.
+            if t and len(t.strip()) > 50:
                 pages_text.append(t)
-    except Exception:
-        pass
+            else:
+                # Page might be scanned/image-only. Attempt OCR.
+                try:
+                    import pytesseract
+                    from pdf2image import convert_from_path
+                    page_num = idx + 1
+                    logging.info(f"Nativo arrojó texto corto o vacío en página {page_num} de {path.name}. Intentando OCR...")
+                    images = convert_from_path(str(path), first_page=page_num, last_page=page_num)
+                    if images:
+                        ocr_text = pytesseract.image_to_string(images[0], lang='spa+eng')
+                        if ocr_text and len(ocr_text.strip()) > 0:
+                            logging.info(f"OCR exitoso en página {page_num}: {len(ocr_text)} caracteres reconocidos.")
+                            pages_text.append(ocr_text)
+                        else:
+                            logging.warning(f"OCR no detectó texto en página {page_num}.")
+                    else:
+                        if t: pages_text.append(t)
+                except Exception as e:
+                    logging.error(f"Fallo de OCR en página {idx+1} de {path.name}: {e}")
+                    if t:
+                        pages_text.append(t)
+    except Exception as e:
+        logging.error(f"Error al procesar PDF {path.name}: {e}")
     return "\n".join(pages_text)
 
 def extract_docx(path):

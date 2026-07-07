@@ -21,3 +21,7 @@ areteia_plugin.zip
 Thumbs.db
 
 RAG_encaje_2.docx.pdf
+
+# Moodle backups
+*.mbz
+*.gz
