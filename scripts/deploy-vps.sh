@@ -21,6 +21,15 @@ git fetch origin
 git checkout "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
+# El git reset --hard de arriba puede reescribir este mismo script en disco.
+# Bash puede seguir ejecutando bytes viejos ya bufferados si no se relanza.
+# Re-ejecutamos desde el archivo ya actualizado para evitar correr una mezcla
+# de versión vieja/nueva del script.
+if [ -z "$ARETEIA_DEPLOY_REEXEC" ]; then
+    export ARETEIA_DEPLOY_REEXEC=1
+    exec bash "$0" "$BRANCH"
+fi
+
 echo "--- [1b/6] Venv Python ---"
 CURRENT_HASH=$(md5sum "$REQ" 2>/dev/null | cut -d' ' -f1)
 SAVED_HASH=$(cat "$REQ_HASH_FILE" 2>/dev/null || echo "")
