@@ -34,9 +34,15 @@ else
     echo "Venv OK, sin cambios."
 fi
 
-echo "--- [2/6] Copiar plugin PHP a Moodle ---"
+echo "--- [2/6] Copiar plugin PHP a Moodle (preservando areteia.ini) ---"
+INI_BACKUP="/tmp/areteia.ini.bak"
+cp "$MOODLE/local/areteia/areteia.ini" "$INI_BACKUP" 2>/dev/null || true
 rm -rf "$MOODLE/local/areteia"
 cp -r "$REPO_DIR/local/areteia" "$MOODLE/local/areteia"
+if [ -f "$INI_BACKUP" ]; then
+    cp "$INI_BACKUP" "$MOODLE/local/areteia/areteia.ini"
+    rm -f "$INI_BACKUP"
+fi
 
 echo "--- [3/6] Purgar caché de Moodle ---"
 "$PHP" "$MOODLE/admin/cli/purge_caches.php"
