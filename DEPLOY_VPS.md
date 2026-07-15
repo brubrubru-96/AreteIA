@@ -14,6 +14,35 @@ Esta guía cubre la instalación manual de AreteIA en un VPS con Moodle ya insta
 
 ---
 
+## Requisitos de sistema para OCR (rama `graficos`)
+
+El servicio usa `pytesseract` y `pdf2image` para extraer texto de PDFs escaneados/imágenes. Son paquetes Python, pero dependen de binarios del sistema operativo que `pip install` NO instala. Sin esto, el OCR falla en silencio aunque el venv esté completo.
+
+En AlmaLinux / RHEL / CentOS:
+
+```bash
+dnf install -y epel-release
+dnf install -y tesseract poppler-utils tesseract-langpack-spa
+```
+
+En Debian / Ubuntu:
+
+```bash
+apt-get update
+apt-get install -y tesseract-ocr tesseract-ocr-spa poppler-utils
+```
+
+Verificar:
+
+```bash
+which tesseract pdftoppm
+tesseract --list-langs   # debe listar "spa"
+```
+
+No hace falta reiniciar el servicio después de instalar — `pytesseract` invoca el binario en cada request, no lo carga al arrancar.
+
+---
+
 ## 1. Clonar el repositorio
 
 ```bash
